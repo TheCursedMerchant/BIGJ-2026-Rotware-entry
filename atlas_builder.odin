@@ -64,11 +64,10 @@ TEXTURES_DIR :: "textures"
 LETTERS_IN_FONT :: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890?!&.,_:[]-+"
 
 // The font to extract letters from
-FONT_FILENAME :: "font.ttf"
+FONT_FILENAME :: "fonts/dogicapixel.ttf"
 
 // The font size of letters extracted from font
 FONT_SIZE :: 32
-
 
 // ---------------------
 // ATLAS BUILDER PROGRAM
