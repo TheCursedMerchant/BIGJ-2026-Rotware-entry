@@ -11,6 +11,12 @@ texture2: rl.Texture
 texture2_rot: f32
 sound_explosion : rl.Sound
 debug_color : rl.Color = rl.WHITE
+atlas: rl.Texture
+
+// Alias's
+Font :: rl.Font
+Texture :: rl.Texture
+Rect :: rl.Rectangle
 
 init :: proc() {
 	run = true
@@ -31,6 +37,12 @@ init :: proc() {
 		texture2 = rl.LoadTextureFromImage(long_cat_img)
 		rl.UnloadImage(long_cat_img)
 	}
+
+    if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
+        atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
+        atlas = rl.LoadTextureFromImage(atlas_image)
+        rl.UnloadImage(atlas_image)
+    }
 
 	rl.InitAudioDevice()
     if rl.IsAudioDeviceReady() {
@@ -55,8 +67,11 @@ update :: proc() {
 		}
 		rl.DrawTexturePro(texture2, source_rect, dest_rect, {dest_rect.width/2, dest_rect.height/2}, texture2_rot, rl.WHITE)
 	}
-	rl.DrawTextureEx(texture, rl.GetMousePosition(), 0, 5, rl.WHITE)
-	rl.DrawRectangleRec({0, 0, 220, 130}, rl.BLACK)
+	//rl.DrawTextureEx(texture, rl.GetMousePosition(), 0, 5, rl.WHITE)
+    
+    anim := create_atlas_anim(.Player_Idle_Down)
+    draw_atlas_anim_at_pos(anim, rl.GetMousePosition(), {}, atlas)
+    rl.DrawRectangleRec({0, 0, 220, 130}, rl.BLACK)
 	rl.GuiLabel({10, 10, 200, 20}, "raygui works!")
 
 	if rl.GuiButton({10, 30, 200, 20}, "Print to log (see console)") {
@@ -97,4 +112,41 @@ should_run :: proc() -> bool {
 		}
 	}
 	return run
+}
+
+//load_atlased_font :: proc(atlas: Texture) -> Font {
+//	num_glyphs := len(atlas_glyphs)
+//	font_rects := make([]Rect, num_glyphs)
+//	glyphs := make([]GlyphInfo, num_glyphs)
+//	for ag, idx in atlas_glyphs {
+//		font_rects[idx] = ag.rect
+//		glyphs[idx] = {
+//			value    = ag.value,
+//			offsetX  = i32(ag.offset_x),
+//			offsetY  = i32(ag.offset_y),
+//			advanceX = i32(ag.advance_x),
+//		}
+//	}
+//
+//	return {
+//		baseSize = ATLAS_FONT_SIZE,
+//		glyphCount = i32(num_glyphs),
+//		glyphPadding = 0,
+//		texture = atlas,
+//		recs = raw_data(font_rects),
+//		glyphs = raw_data(glyphs),
+//	}
+//}
+
+draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atlas: Texture) {
+	anim_texture := anim_atlas_texture(anim)
+	atlas_rect := anim_texture.rect
+	atlas_offset := [2]f32{anim_texture.offset_left, anim_texture.offset_top}
+	dest := Rect {
+		pos.x + atlas_offset.x + offset.x,
+		pos.y + atlas_offset.y + offset.y,
+		anim_texture.rect.width,
+		anim_texture.rect.height,
+	}
+	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, rl.WHITE)
 }
