@@ -19,7 +19,7 @@ create_atlas_anim :: proc(anim: Animation_Name, loop: bool = true) -> Animation 
 	}
 }
 
-update_atlas_anim :: proc(a: ^Animation, dt: f32) -> bool {
+update_atlas_anim :: proc(a: ^Animation, dt: f32) {
 	a.timer -= dt
 
 	if a.timer <= 0 {
@@ -28,14 +28,15 @@ update_atlas_anim :: proc(a: ^Animation, dt: f32) -> bool {
 
 		if a.current_frame > anim.last_frame { 
             a.current_frame = anim.last_frame
-            if a.loop do a.current_frame = anim.first_frame
-			a.finished = true
+            a.finished = true
+            if a.loop {
+                a.finished = false
+                a.current_frame = anim.first_frame
+            }
 		}
 
 		a.timer = atlas_textures[a.current_frame].duration
 	}
-
-	return a.finished
 }
 
 atlas_anim_len :: proc(anim: Animation_Name) -> f32 {
