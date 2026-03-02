@@ -3,6 +3,7 @@ package game
 import rl "vendor:raylib"
 import "core:log"
 import "core:c"
+import la "core:math/linalg"
 
 // Alias's
 Font :: rl.Font
@@ -10,20 +11,98 @@ Texture :: rl.Texture
 Rect :: rl.Rectangle
 GlyphInfo :: rl.GlyphInfo
 
+Player :: struct {
+    render  : Render, 
+    box     : Box,
+    vel     : [2]f32,
+    acc     : f32,
+}
+
+Box :: [4]f32
+
+Render :: struct {
+    anim    : Animation,
+    pos     : [2]f32,
+    offset  : [2]f32,
+}
+
+InputKind :: enum {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+Input :: struct {
+    key : rl.KeyboardKey,
+    dir : [2]int,
+    kind : InputKind,
+}
+
+
 run: bool
 atlas: rl.Texture
 font: Font
+player : Player
+
+inputs := [InputKind]Input {
+    .Up = { .W, {0, -1}, .Up },
+    .Down = { .S, {0, 1}, .Down },
+    .Left = { .A, {-1, 0}, .Left },
+    .Right = { .D, {1, 0}, .Right },
+}
+
+is_input_pressed :: proc(input : Input) -> bool {
+    return rl.IsKeyPressed(input.key)
+}
+
+is_input_down :: proc(input : Input) -> bool {
+    return rl.IsKeyDown(input.key)
+}
+
+handle_player_input :: proc(dt: f32) {
+    mv_dir : [2]f32
+    for i in inputs {
+        if is_input_down(i) {
+            switch i.kind {
+            case .Up, .Down, .Left, .Right :
+                mv_dir = arr_cast(i.dir, f32)
+                player.vel += player.acc * dt * mv_dir
+            }
+        }
+    }
+}
+
+// Check for Collisions
+DRAG : f32 : 25.0
+physics_update :: proc (dt: f32) {
+    player.vel = la.lerp(player.vel, [2]f32{}, DRAG * dt) 
+    player.box.xy += player.vel
+}
+
+arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
+    out : [N]S
+    for val, idx in arr {
+        out[idx] = S(val)
+    }
+    return out
+}
 
 init :: proc() {
 	run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.InitWindow(640, 360, "Odin + Raylib on the web")
+    rl.SetTargetFPS(60)
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
         atlas = rl.LoadTextureFromImage(atlas_image)
         rl.UnloadImage(atlas_image)
         font = load_atlased_font(atlas)
+
+        player.render.anim = create_atlas_anim(.Player_Idle_Down, true)
+        player.box.xy = { 32, 32 }
+        player.acc = 250.0
     }
 
 	rl.InitAudioDevice()
@@ -34,11 +113,14 @@ init :: proc() {
 }
 
 update :: proc() {
+    dt := rl.GetFrameTime()
+    handle_player_input(dt)
+    physics_update(dt)
 	rl.BeginDrawing()
 	    rl.ClearBackground({0, 120, 153, 255})
-        anim := create_atlas_anim(.Player_Idle_Down)
-        draw_atlas_anim_at_pos(anim, rl.GetMousePosition(), {}, atlas) 
-        rl.DrawTextEx(font, "My text", 220, 24, 1.0, rl.WHITE)
+        rl.DrawRectangleLines(0, 0, rl.GetScreenWidth() + 1, rl.GetScreenHeight() + 1, rl.WHITE)
+        update_atlas_anim(&player.render.anim, dt)
+        draw_atlas_anim_at_pos(player.render.anim, player.box.xy, {}, atlas) 
 	rl.EndDrawing()
 
 	free_all(context.temp_allocator)
@@ -95,8 +177,8 @@ draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atl
 	dest := Rect {
 		pos.x + atlas_offset.x + offset.x,
 		pos.y + atlas_offset.y + offset.y,
-		anim_texture.rect.width,
-		anim_texture.rect.height,
+		anim_texture.rect.width * 4,
+		anim_texture.rect.height * 4,
 	}
 	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, rl.WHITE)
 }
