@@ -3,7 +3,8 @@ package game
 import rl "vendor:raylib"
 import "core:log"
 import "core:c"
-import la "core:math/linalg"
+
+SPRITE_SCALE :: 4.0
 
 // Alias's
 Font :: rl.Font
@@ -12,10 +13,8 @@ Rect :: rl.Rectangle
 GlyphInfo :: rl.GlyphInfo
 
 Player :: struct {
-    render  : Render, 
-    box     : Box,
-    vel     : [2]f32,
-    acc     : f32,
+    render          : Render,
+    kinematic_body  : KinematicBody,
 }
 
 Box :: [4]f32
@@ -39,11 +38,15 @@ Input :: struct {
     kind : InputKind,
 }
 
+Context :: struct {
+    collision_bodies : [dynamic]CollisionBody,
+    atlas   : Texture,
+    font    : Font,
+    player  : Player,
+}
 
 run: bool
-atlas: rl.Texture
-font: Font
-player : Player
+game_ctx : ^Context
 
 inputs := [InputKind]Input {
     .Up = { .W, {0, -1}, .Up },
@@ -62,22 +65,24 @@ is_input_down :: proc(input : Input) -> bool {
 
 handle_player_input :: proc(dt: f32) {
     mv_dir : [2]f32
+    player := &game_ctx.player
     for i in inputs {
         if is_input_down(i) {
             switch i.kind {
             case .Up, .Down, .Left, .Right :
                 mv_dir = arr_cast(i.dir, f32)
-                player.vel += player.acc * dt * mv_dir
+                player.kinematic_body.vel += player.kinematic_body.acc * dt * mv_dir
             }
         }
     }
 }
 
-// Check for Collisions
-DRAG : f32 : 25.0
 physics_update :: proc (dt: f32) {
-    player.vel = la.lerp(player.vel, [2]f32{}, DRAG * dt) 
-    player.box.xy += player.vel
+    slide_move(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
+}
+
+in_screen_bounds :: proc (pos: [2]f32) -> bool {
+    return pos.x >= 0 && pos.x < f32(rl.GetScreenWidth()) && pos.y >= 0 && pos.y < f32(rl.GetScreenHeight())
 }
 
 arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
@@ -88,21 +93,38 @@ arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
     return out
 }
 
+box_to_rect :: proc(box: Box) -> rl.Rectangle {
+    return rl.Rectangle{ box.x, box.y, box.z, box.w }
+}
+
 init :: proc() {
 	run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.InitWindow(640, 360, "Odin + Raylib on the web")
     rl.SetTargetFPS(60)
+    
+    game_ctx = new(Context)
+    // Adding test level geometry
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 32, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 168, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 304, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 440, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
-        atlas = rl.LoadTextureFromImage(atlas_image)
+        game_ctx.atlas = rl.LoadTextureFromImage(atlas_image)
         rl.UnloadImage(atlas_image)
-        font = load_atlased_font(atlas)
+        game_ctx.font = load_atlased_font(game_ctx.atlas)
 
-        player.render.anim = create_atlas_anim(.Player_Idle_Down, true)
-        player.box.xy = { 32, 32 }
-        player.acc = 250.0
+        // Init Player
+        game_ctx.player.render.anim = create_atlas_anim(.Player_Idle_Down, true)
+        game_ctx.player.kinematic_body = { 
+            collision_body = { 
+                box = {32, 32, 3.0 * 16, 3.0 * 16 }, 
+                kind = .Slide, 
+            }, 
+            acc = 250.0,
+        }
     }
 
 	rl.InitAudioDevice()
@@ -116,11 +138,14 @@ update :: proc() {
     dt := rl.GetFrameTime()
     handle_player_input(dt)
     physics_update(dt)
-	rl.BeginDrawing()
+    rl.BeginDrawing()
 	    rl.ClearBackground({0, 120, 153, 255})
-        rl.DrawRectangleLines(0, 0, rl.GetScreenWidth() + 1, rl.GetScreenHeight() + 1, rl.WHITE)
-        update_atlas_anim(&player.render.anim, dt)
-        draw_atlas_anim_at_pos(player.render.anim, player.box.xy, {}, atlas) 
+        for body in game_ctx.collision_bodies {
+            rl.DrawRectangleRec(box_to_rect(body.box), rl.WHITE)
+        }
+        update_atlas_anim(&game_ctx.player.render.anim, dt)
+        draw_atlas_anim_at_pos(game_ctx.player.render.anim, game_ctx.player.kinematic_body.collision_body.box.xy, { -14, -32 }, game_ctx.atlas) 
+//        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
 	rl.EndDrawing()
 
 	free_all(context.temp_allocator)
@@ -177,8 +202,8 @@ draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atl
 	dest := Rect {
 		pos.x + atlas_offset.x + offset.x,
 		pos.y + atlas_offset.y + offset.y,
-		anim_texture.rect.width * 4,
-		anim_texture.rect.height * 4,
+		anim_texture.rect.width * SPRITE_SCALE,
+		anim_texture.rect.height * SPRITE_SCALE,
 	}
 	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, rl.WHITE)
 }
