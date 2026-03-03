@@ -60,6 +60,7 @@ box_resize :: proc(box: ^Box, amount: f32) {
     box.rectangle.zw += amount
     if box.rectangle.z < 0 || box.rectangle.w < 0 {
         box.rectangle.zw = 0
+        return
     }
     box.rectangle.xy -= (amount/2)
 }

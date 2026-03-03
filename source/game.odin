@@ -170,7 +170,7 @@ init :: proc() {
 update :: proc() {
     dt := rl.GetFrameTime()
     handle_player_input(dt)
-    box_resize(&game_ctx.collision_bodies[4].box, 1)
+    box_resize(&game_ctx.collision_bodies[4].box, -0.25)
     physics_update(dt)
     rl.BeginDrawing()
 	    rl.ClearBackground({0, 120, 153, 255})
