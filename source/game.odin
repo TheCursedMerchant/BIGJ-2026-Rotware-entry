@@ -106,9 +106,9 @@ init :: proc() {
     game_ctx = new(Context)
     // Adding test level geometry
     append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 32, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
-    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 168, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 256, 168, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
     append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 304, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
-    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 440, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 256, 440, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
@@ -120,7 +120,7 @@ init :: proc() {
         game_ctx.player.render.anim = create_atlas_anim(.Player_Idle_Down, true)
         game_ctx.player.kinematic_body = { 
             collision_body = { 
-                box = {32, 32, 3.0 * 16, 3.0 * 16 }, 
+                box = {32, 32, 2.0 * 16, 3.0 * 16 }, 
                 kind = .Slide, 
             }, 
             acc = 250.0,
@@ -144,8 +144,10 @@ update :: proc() {
             rl.DrawRectangleRec(box_to_rect(body.box), rl.WHITE)
         }
         update_atlas_anim(&game_ctx.player.render.anim, dt)
-        draw_atlas_anim_at_pos(game_ctx.player.render.anim, game_ctx.player.kinematic_body.collision_body.box.xy, { -14, -32 }, game_ctx.atlas) 
-//        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
+        draw_atlas_anim_at_pos(game_ctx.player.render.anim, game_ctx.player.kinematic_body.collision_body.box.xy, { -16, -36 }, game_ctx.atlas) 
+
+        // DEBUG Player collision Box
+        // rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
 	rl.EndDrawing()
 
 	free_all(context.temp_allocator)

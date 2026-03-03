@@ -1,8 +1,9 @@
 package game
 import la "core:math/linalg"
+import "core:log"
 
 // Check for Collisions
-MAX_ITERS :: 3
+MAX_ITERS :: 4
 DRAG : f32 : 25.0
 
 CollisionBodyKind :: enum { Static, Slide }
@@ -81,6 +82,7 @@ slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f
             } else { break }
         }
         //kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
+        log.infof("Final velocity : %v", kb.vel)
         kb.collision_body.box.xy += kb.vel
     } else {
         kb.collision_body.box.xy = new_box.xy
