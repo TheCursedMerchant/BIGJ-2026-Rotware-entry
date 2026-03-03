@@ -3,10 +3,8 @@ package game
 import rl "vendor:raylib"
 import "core:log"
 import "core:c"
-import la "core:math/linalg"
 
 SPRITE_SCALE :: 4.0
-DRAG : f32 : 25.0
 
 // Alias's
 Font :: rl.Font
@@ -16,10 +14,7 @@ GlyphInfo :: rl.GlyphInfo
 
 Player :: struct {
     render          : Render,
-    collision_body  : CollisionBody,
-    vel             : [2]f32,
-    acc             : f32,
-    mv_dir          : [2]int,
+    kinematic_body  : KinematicBody,
 }
 
 Box :: [4]f32
@@ -75,41 +70,15 @@ handle_player_input :: proc(dt: f32) {
         if is_input_down(i) {
             switch i.kind {
             case .Up, .Down, .Left, .Right :
-                player.mv_dir = i.dir
                 mv_dir = arr_cast(i.dir, f32)
-                player.vel += player.acc * dt * mv_dir
+                player.kinematic_body.vel += player.kinematic_body.acc * dt * mv_dir
             }
         }
     }
 }
 
-// Check for Collisions
-MAX_ITERS :: 3
 physics_update :: proc (dt: f32) {
-    player := &game_ctx.player
-    player.vel = la.lerp(player.vel, [2]f32{}, DRAG * dt)
-    new_box := player.collision_body.box
-    new_box.xy = player.collision_body.box.xy + player.vel
-    c_body, has_collision := check_collision(new_box, game_ctx.collision_bodies[:])
-    if has_collision {
-        normal := get_collision_normal(new_box, c_body.box)
-        slide_vel := player.vel - normal * (la.vector_dot(player.vel ,normal))
-        player.vel = slide_vel
-        for _ in 0..<MAX_ITERS {
-            new_box = player.collision_body.box
-            new_box.xy = player.collision_body.box.xy + player.vel
-            c_body, has_collision = check_collision(new_box, game_ctx.collision_bodies[:])
-            if has_collision {
-                normal = get_collision_normal(new_box, c_body.box)
-                slide_vel = player.vel - normal * (la.vector_dot(player.vel ,normal))
-                player.vel = slide_vel
-            } else { break }
-        }
-        //player.vel = la.lerp(player.vel, [2]f32{}, DRAG * dt)
-        player.collision_body.box.xy += player.vel
-    } else {
-        player.collision_body.box.xy = new_box.xy
-    }
+    slide_move(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
 }
 
 in_screen_bounds :: proc (pos: [2]f32) -> bool {
@@ -139,9 +108,15 @@ init :: proc() {
         rl.UnloadImage(atlas_image)
         game_ctx.font = load_atlased_font(game_ctx.atlas)
 
+        // Init Player
         game_ctx.player.render.anim = create_atlas_anim(.Player_Idle_Down, true)
-        game_ctx.player.collision_body = { box = {32, 32, SPRITE_SCALE * 16, SPRITE_SCALE * 16 }, kind = .Slide }
-        game_ctx.player.acc = 250.0
+        game_ctx.player.kinematic_body = { 
+            collision_body = { 
+                box = {32, 32, SPRITE_SCALE * 16, SPRITE_SCALE * 16 }, 
+                kind = .Slide, 
+            }, 
+            acc = 250.0,
+        }
     }
 
 	rl.InitAudioDevice()
@@ -157,7 +132,7 @@ update :: proc() {
     physics_update(dt)
     c_body := game_ctx.collision_bodies[0]
 	collision_box_rect := Rect { c_body.box.x, c_body.box.y, c_body.box.z, c_body.box.w }
-    player_body := game_ctx.player.collision_body
+    player_body := game_ctx.player.kinematic_body.collision_body
     player_rect := Rect { player_body.box.x, player_body.box.y, player_body.box.z, player_body.box.w }
     rl.BeginDrawing()
 	    rl.ClearBackground({0, 120, 153, 255})
