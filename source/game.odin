@@ -131,6 +131,13 @@ init :: proc() {
             color = rl.BLACK,
             state = .None}, 
         kind = .Static})
+    append(&game_ctx.collision_bodies, CollisionBody{ 
+        box = {
+            rectangle = { 500, 500, SPRITE_SCALE * 16, SPRITE_SCALE * 16 },
+            line_thickness = 1,
+            color = rl.BLACK,
+            state = .None}, 
+        kind = .Static})
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
@@ -163,6 +170,7 @@ init :: proc() {
 update :: proc() {
     dt := rl.GetFrameTime()
     handle_player_input(dt)
+    box_resize(&game_ctx.collision_bodies[4].box, 1)
     physics_update(dt)
     rl.BeginDrawing()
 	    rl.ClearBackground({0, 120, 153, 255})

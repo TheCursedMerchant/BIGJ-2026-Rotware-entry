@@ -2,7 +2,6 @@ package game
 
 // Imports
 import rl "vendor:raylib"
-import "core:math"
 
 
 // Constants
@@ -58,18 +57,11 @@ box_create :: proc(rect: Rectangle, thick: f32, color: rl.Color, state: Box_Stat
 }
 
 box_resize :: proc(box: ^Box, amount: f32) {
-    o_dim, new_dim := box.rectangle.zw, box.rectangle.zw
-    o_dim *= o_dim
-    o_hypot := math.sqrt(o_dim.x + o_dim.y)
-    new_dim += amount
-    if new_dim.x <= 0 || new_dim.y <= 0 {
-        new_dim = 1
+    box.rectangle.zw += amount
+    if box.rectangle.z < 0 || box.rectangle.w < 0 {
+        box.rectangle.zw = 0
     }
-    box.rectangle.zw = new_dim
-    new_dim *= new_dim
-    new_hypot := math.sqrt(new_dim.x + new_dim.y)
-    diff_hypot := new_hypot - o_hypot
-    box.rectangle.xy -= (diff_hypot/2)
+    box.rectangle.xy -= (amount/2)
 }
 
 
