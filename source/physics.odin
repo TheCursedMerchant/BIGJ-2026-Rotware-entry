@@ -82,7 +82,6 @@ slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f
             } else { break }
         }
         //kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
-        log.infof("Final velocity : %v", kb.vel)
         kb.collision_body.box.xy += kb.vel
     } else {
         kb.collision_body.box.xy = new_box.xy
