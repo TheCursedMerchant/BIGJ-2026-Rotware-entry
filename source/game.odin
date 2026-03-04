@@ -73,14 +73,13 @@ handle_player_input :: proc(dt: f32) {
                 target_vel := mv_dir * player.max_speed
                 vel_diff := target_vel - player.kinematic_body.vel
                 player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
-                // Optional clamp?
             }
         }
     }
 }
 
 physics_update :: proc (dt: f32) {
-    slide_move(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
+    move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
 }
 
 in_screen_bounds :: proc (pos: [2]f32) -> bool {
@@ -160,9 +159,9 @@ init :: proc() {
                     state = .None }, 
                 kind = .Slide, 
             }, 
-            acc = 20.0,
+            acc = 12.0,
         }
-        game_ctx.player.max_speed = 20.0
+        game_ctx.player.max_speed = 12.0
     }
 
 	rl.InitAudioDevice()
@@ -182,10 +181,15 @@ update :: proc() {
             box_draw(body.box)
         }
         update_atlas_anim(&game_ctx.player.render.anim, dt)
-        draw_atlas_anim_at_pos(game_ctx.player.render.anim, game_ctx.player.kinematic_body.collision_body.box.rectangle.xy, { -16, -36 }, game_ctx.atlas) 
+        draw_atlas_anim_at_pos(
+            game_ctx.player.render.anim, 
+            game_ctx.player.kinematic_body.collision_body.box.rectangle.xy, 
+            { -10, -30 },
+            game_ctx.atlas,
+        )
 
         // DEBUG Player collision Box
-        // rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
+        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
 	rl.EndDrawing()
 
 	free_all(context.temp_allocator)
