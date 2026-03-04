@@ -112,7 +112,7 @@ init :: proc() {
     append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 32, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
     append(&game_ctx.collision_bodies, CollisionBody{ box = { 256, 168, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
     append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 304, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
-    append(&game_ctx.collision_bodies, CollisionBody{ box = { 256, 440, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
+    append(&game_ctx.collision_bodies, CollisionBody{ box = { 128, 440, SPRITE_SCALE * 16, SPRITE_SCALE * 16 } })
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
