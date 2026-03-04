@@ -189,7 +189,7 @@ update :: proc() {
         )
 
         // DEBUG Player collision Box
-        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
+        //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
 	rl.EndDrawing()
 
 	free_all(context.temp_allocator)
