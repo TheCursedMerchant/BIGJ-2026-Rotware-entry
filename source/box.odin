@@ -65,4 +65,9 @@ box_resize :: proc(box: ^Box, amount: f32) {
     box.rectangle.xy -= (amount/2)
 }
 
+box_draw :: proc(box: Box) {
+    ray_rect := rl.Rectangle{box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w}
+    rl.DrawRectangleLinesEx(ray_rect, box.line_thickness, box.color)
+}
+
 

@@ -170,12 +170,11 @@ init :: proc() {
 update :: proc() {
     dt := rl.GetFrameTime()
     handle_player_input(dt)
-    box_resize(&game_ctx.collision_bodies[4].box, -0.25)
     physics_update(dt)
     rl.BeginDrawing()
 	    rl.ClearBackground({0, 120, 153, 255})
         for body in game_ctx.collision_bodies {
-            rl.DrawRectangleRec(box_to_rect(body.box), rl.WHITE)
+            box_draw(body.box)
         }
         update_atlas_anim(&game_ctx.player.render.anim, dt)
         draw_atlas_anim_at_pos(game_ctx.player.render.anim, game_ctx.player.kinematic_body.collision_body.box.rectangle.xy, { -14, -32 }, game_ctx.atlas) 
