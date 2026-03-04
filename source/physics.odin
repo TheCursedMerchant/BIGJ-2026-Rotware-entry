@@ -23,15 +23,17 @@ CollisionManager :: struct {
 }
 
 has_collision_aabb :: proc(a, b : Box) -> bool {
+    a_rect, b_rect := a.rectangle, b.rectangle
     return (
-        a.x < b.x + b.z &&
-        a.y < b.y + b.w &&
-        b.x < a.x + a.z &&
-        b.y < a.w + a.y
+        a_rect.x < b_rect.x + b_rect.z &&
+        a_rect.y < b_rect.y + b_rect.w &&
+        b_rect.x < a_rect.x + a_rect.z &&
+        b_rect.y < a_rect.w + a_rect.y
     )
 }
 
 get_collision_normal :: proc(a, b : Box) -> [2]f32 {
+    a, b := a.rectangle, b.rectangle
     a_center := a.xy + (a.zw / 2)
     b_center := b.xy + (b.zw / 2)
     x_overlap := ((a.z / 2) + (b.z / 2)) - la.abs(a_center.x - b_center.x)
@@ -64,7 +66,7 @@ check_collision :: proc(move_box : Box, collision_bodies : []CollisionBody) -> (
 slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f32) {
     kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
     new_box := kb.collision_body.box
-    new_box.xy = kb.collision_body.box.xy + kb.vel
+    new_box.rectangle.xy = kb.collision_body.box.rectangle.xy + kb.vel
     c_body, has_collision := check_collision(new_box, collision_bodies)
     if has_collision {
         normal := get_collision_normal(new_box, c_body.box)
@@ -72,7 +74,7 @@ slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f
         kb.vel = slide_vel
         for _ in 0..<MAX_ITERS {
             new_box = kb.collision_body.box
-            new_box.xy = kb.collision_body.box.xy + kb.vel
+            new_box.rectangle.xy = kb.collision_body.box.rectangle.xy + kb.vel
             c_body, has_collision = check_collision(new_box, game_ctx.collision_bodies[:])
             if has_collision {
                 normal = get_collision_normal(new_box, c_body.box)
@@ -81,9 +83,9 @@ slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f
             } else { break }
         }
         //kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
-        kb.collision_body.box.xy += la.floor(kb.vel)
+        kb.collision_body.box.rectangle.xy += kb.vel
     } else {
-        kb.collision_body.box.xy = la.floor(new_box.xy)
+        kb.collision_body.box.rectangle.xy = new_box.rectangle.xy
     }
 }
 
