@@ -34,7 +34,7 @@ Box :: struct {
 
 Key_Value :: struct($T: typeid, $E: typeid) {
     key : T,
-    value : E
+    value : E,
 }
 
 
@@ -76,7 +76,7 @@ box_draw :: proc(box: Box) {
 }
 
 box_contains_position :: proc(rect: Rectangle, box: Box) -> (contains: bool) {
-    assert(rect.x >= 0); assert(rect.y >= 0); 
+    assert(rect.x >= 0); assert(rect.y >= 0)
     assert(box.rectangle.x >= 0); assert(box.rectangle.y >= 0); assert(box.rectangle.z >= 0); assert(box.rectangle.w >= 0)
     rect_pos := rect.xy
     box_pos := box.rectangle.xy
