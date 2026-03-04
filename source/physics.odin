@@ -1,8 +1,9 @@
 package game
 import la "core:math/linalg"
+import "core:log"
 
 // Check for Collisions
-MAX_ITERS :: 3
+MAX_ITERS :: 4
 DRAG : f32 : 25.0
 
 CollisionBodyKind :: enum { Static, Slide }
