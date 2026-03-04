@@ -1,6 +1,5 @@
 package game
 import la "core:math/linalg"
-import "core:log"
 
 // Check for Collisions
 MAX_ITERS :: 4
