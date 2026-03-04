@@ -1,6 +1,5 @@
 package game
 import la "core:math/linalg"
-import "core:log"
 
 // Check for Collisions
 MAX_ITERS :: 4
@@ -82,9 +81,9 @@ slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f
             } else { break }
         }
         //kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
-        kb.collision_body.box.xy += kb.vel
+        kb.collision_body.box.xy += la.floor(kb.vel)
     } else {
-        kb.collision_body.box.xy = new_box.xy
+        kb.collision_body.box.xy = la.floor(new_box.xy)
     }
 }
 

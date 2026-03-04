@@ -15,6 +15,7 @@ GlyphInfo :: rl.GlyphInfo
 Player :: struct {
     render          : Render,
     kinematic_body  : KinematicBody,
+    max_speed       : f32,
 }
 
 Box :: [4]f32
@@ -71,7 +72,10 @@ handle_player_input :: proc(dt: f32) {
             switch i.kind {
             case .Up, .Down, .Left, .Right :
                 mv_dir = arr_cast(i.dir, f32)
-                player.kinematic_body.vel += player.kinematic_body.acc * dt * mv_dir
+                target_vel := mv_dir * player.max_speed
+                vel_diff := target_vel - player.kinematic_body.vel
+                player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
+                // Optional clamp?
             }
         }
     }
@@ -123,8 +127,9 @@ init :: proc() {
                 box = {32, 32, 2.0 * 16, 3.0 * 16 }, 
                 kind = .Slide, 
             }, 
-            acc = 250.0,
+            acc = 20.0,
         }
+        game_ctx.player.max_speed = 20.0
     }
 
 	rl.InitAudioDevice()
