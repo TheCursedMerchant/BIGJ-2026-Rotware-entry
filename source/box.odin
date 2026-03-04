@@ -32,6 +32,11 @@ Box :: struct {
     state : Box_State,
 }
 
+Key_Value :: struct($T: typeid, $E: typeid) {
+    key : T,
+    value : E
+}
+
 
 // Procs
 
@@ -70,4 +75,40 @@ box_draw :: proc(box: Box) {
     rl.DrawRectangleLinesEx(ray_rect, box.line_thickness, box.color)
 }
 
+box_contains_position :: proc(rect: Rectangle, box: Box) -> (contains: bool) {
+    assert(rect.x >= 0); assert(rect.y >= 0); 
+    assert(box.rectangle.x >= 0); assert(box.rectangle.y >= 0); assert(box.rectangle.z >= 0); assert(box.rectangle.w >= 0)
+    rect_pos := rect.xy
+    box_pos := box.rectangle.xy
+    box_end_pos := box.rectangle.xy + box.rectangle.zw
+    if rect_pos.x > box_pos.x && rect_pos.y > box_pos.y && rect.x < box_end_pos.x && rect.y < box_end_pos.y {
+        contains = true
+    }
+    return
+}
 
+box_smallest_containing_position :: proc(rect: Rectangle, arr: []Box) -> (index: int, found: bool) {
+    assert(len(arr) > 0); assert(rectangle_validity_check(rect))
+    filter : [dynamic]Key_Value(int, Box); defer {delete(filter)}
+    for i in 0..<len(arr) {
+        if box_contains_position(rect, arr[i]) {
+            pair := Key_Value(int, Box){i, arr[i]}
+            append(&filter, pair)
+        }
+    }
+    if len(filter) == 0 {
+        return -1, false
+    }
+    if len(filter) == 1 {
+        return filter[0].key, true
+    }
+    smallest := filter[0]
+    for i in 1..<len(filter) {
+        p_smallest := smallest.value.rectangle.z * smallest.value.rectangle.w
+        current_area := filter[i].value.rectangle.z * filter[i].value.rectangle.w
+        if current_area < p_smallest {
+            smallest = filter[i]
+        }
+    }
+    return smallest.key, true
+}
