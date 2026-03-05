@@ -11,6 +11,7 @@ KinematicBody :: struct {
     collision_body  : CollisionBody,
     vel             : [2]f32,
     acc             : f32,
+    remainder       : [2]f32,
 }
 
 CollisionBody :: struct {
@@ -18,74 +19,89 @@ CollisionBody :: struct {
     kind    : CollisionBodyKind,
 }
 
-CollisionManager :: struct {
-    static_bodies : [dynamic]CollisionBody,
-}
+move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
+    kb.remainder.x += kb.vel.x
+    move := la.round(kb.remainder.x)
 
-has_collision_aabb :: proc(a, b : Box) -> bool {
-    a_rect, b_rect := a.rectangle, b.rectangle
-    return (
-        a_rect.x < b_rect.x + b_rect.z &&
-        a_rect.y < b_rect.y + b_rect.w &&
-        b_rect.x < a_rect.x + a_rect.z &&
-        b_rect.y < a_rect.w + a_rect.y
-    )
-}
+    if (move != 0) {
+        kb.remainder.x -= f32(move)
+        sign := la.sign(move)
+        has_collision : bool
+        test_rect := kb.collision_body.box.rectangle
+        for move != 0 {
+            test_rect.x += f32(sign)
+            for solid in solids {
+                if aabb_collision(test_rect, solid.box.rectangle) {
+                    has_collision = true
+                    break
+                }
+            }
 
-get_collision_normal :: proc(a, b : Box) -> [2]f32 {
-    a, b := a.rectangle, b.rectangle
-    a_center := a.xy + (a.zw / 2)
-    b_center := b.xy + (b.zw / 2)
-    x_overlap := ((a.z / 2) + (b.z / 2)) - la.abs(a_center.x - b_center.x)
-    y_overlap := ((a.w / 2) + (b.w / 2)) - la.abs(a_center.y - b_center.y)
-
-    if x_overlap < y_overlap {
-        if a_center.x < b_center.x {
-            return { 1, 0 }
-        } else {
-            return { -1, 0 }
-        }
-    } else {
-        if a_center.y < b_center.y {
-            return { 0, 1 }
-        } else {
-            return { 0, -1 }
-        }
-    }
-}
-
-check_collision :: proc(move_box : Box, collision_bodies : []CollisionBody) -> (CollisionBody, bool) {
-    for body in collision_bodies {
-        if has_collision_aabb(move_box, body.box) {
-            return body, true
-        }
-    }
-    return {}, false
-}
-
-slide_move :: proc(kb: ^KinematicBody, collision_bodies : []CollisionBody, dt: f32) {
-    kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
-    new_box := kb.collision_body.box
-    new_box.rectangle.xy = kb.collision_body.box.rectangle.xy + kb.vel
-    c_body, has_collision := check_collision(new_box, collision_bodies)
-    if has_collision {
-        normal := get_collision_normal(new_box, c_body.box)
-        slide_vel := kb.vel - normal * (la.vector_dot(kb.vel ,normal))
-        kb.vel = slide_vel
-        for _ in 0..<MAX_ITERS {
-            new_box = kb.collision_body.box
-            new_box.rectangle.xy = kb.collision_body.box.rectangle.xy + kb.vel
-            c_body, has_collision = check_collision(new_box, game_ctx.collision_bodies[:])
             if has_collision {
-                normal = get_collision_normal(new_box, c_body.box)
-                slide_vel = kb.vel - normal * (la.vector_dot(kb.vel ,normal))
-                kb.vel = slide_vel
-            } else { break }
+                kb.vel.x = 0
+                break
+            } else {
+                test_rect.x += f32(sign)
+                move -= sign
+                kb.collision_body.box.rectangle = test_rect
+            }
         }
-        //kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
-        kb.collision_body.box.rectangle.xy += kb.vel
-    } else {
-        kb.collision_body.box.rectangle.xy = new_box.rectangle.xy
     }
+}
+
+
+move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
+    kb.remainder.y += kb.vel.y
+    move := la.round(kb.remainder.y)
+
+    if (move != 0) {
+        kb.remainder.y -= f32(move)
+        sign := la.sign(move)
+        has_collision : bool
+        test_rect := kb.collision_body.box.rectangle
+        for move != 0 {
+            test_rect.y += f32(sign)
+            for solid in solids {
+                if aabb_collision(test_rect, solid.box.rectangle) {
+                    has_collision = true
+                    break
+                }
+            }
+
+            if has_collision {
+                kb.vel.y = 0
+                break
+            } else {
+                test_rect.y += f32(sign)
+                move -= sign
+                kb.collision_body.box.rectangle = test_rect
+            }
+        }
+    }
+}
+
+move_kinematic_body :: proc(kb: ^KinematicBody, solids : []CollisionBody, dt : f32) {
+    kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
+    move_x(kb, solids)
+    move_y(kb, solids)
+}
+
+collide_at :: proc(solids: []CollisionBody, pos : [2]f32) -> bool {
+    return false
+}
+
+point_in_rect :: proc(point : [2]f32, rect: Rectangle) -> bool {
+    return point.x <= (rect.x + rect.z) && point.x >= rect.x && point.y <= (rect.y + rect.z) && point.y >= rect.y
+}
+
+aabb_collision :: proc(a, b : Rectangle) -> bool {
+    return ( a.x < (b.x + b.z) ) && ( (a.x + a.z) > b.x ) && ( a.y < (b.y + b.w) ) && ( (a.y + a.w) > b.y ) 
+}
+
+approach :: proc(current, target, increase : f32) -> f32 {
+    if current < target {
+        return min(current + increase, target)
+    }
+    return max(current - increase, target)
 }
 
