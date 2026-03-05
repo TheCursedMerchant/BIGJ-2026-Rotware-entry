@@ -3,6 +3,7 @@ package game
 import rl "vendor:raylib"
 import "core:log"
 import "core:c"
+import la "core:math/linalg"
 
 SPRITE_SCALE :: 4.0
 
@@ -11,6 +12,7 @@ Font :: rl.Font
 Texture :: rl.Texture
 Rect :: rl.Rectangle
 GlyphInfo :: rl.GlyphInfo
+RenderTexture :: rl.RenderTexture2D
 
 Player :: struct {
     render          : Render,
@@ -38,10 +40,12 @@ Input :: struct {
 }
 
 Context :: struct {
-    collision_bodies : [dynamic]CollisionBody,
-    atlas   : Texture,
-    font    : Font,
-    player  : Player,
+    collision_bodies        : [dynamic]CollisionBody,
+    level_render            : RenderTexture,
+    atlas                   : Texture,
+    font                    : Font,
+    player                  : Player,
+    native_to_screen_ratio  : i32, 
 }
 
 run: bool
@@ -65,16 +69,23 @@ is_input_down :: proc(input : Input) -> bool {
 handle_player_input :: proc(dt: f32) {
     mv_dir : [2]f32
     player := &game_ctx.player
+    has_mv_event : bool
     for i in inputs {
         if is_input_down(i) {
             switch i.kind {
             case .Up, .Down, .Left, .Right :
+                has_mv_event = true
                 mv_dir = arr_cast(i.dir, f32)
                 target_vel := mv_dir * player.max_speed
                 vel_diff := target_vel - player.kinematic_body.vel
                 player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
             }
         }
+    }
+
+    if !has_mv_event {
+        player.kinematic_body.vel.x = approach(player.kinematic_body.vel.x, 0.0, DRAG * dt)
+        player.kinematic_body.vel.y = approach(player.kinematic_body.vel.y, 0.0, DRAG * dt)
     }
 }
 
@@ -100,43 +111,50 @@ box_to_rect :: proc(box: Box) -> rl.Rectangle {
 
 init :: proc() {
 	run = true
+    screen_res := [2]i32{ 1920, 1080 }
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
-	rl.InitWindow(640, 360, "Odin + Raylib on the web")
+	rl.InitWindow(screen_res.x, screen_res.y, "Odin + Raylib on the web")
     rl.SetTargetFPS(60)
     
     game_ctx = new(Context)
+    native_res := [2]i32{ 480, 270 } 
+    res_ratio := screen_res / native_res
+    game_ctx.level_render = rl.LoadRenderTexture(native_res.x, native_res.y)
+    game_ctx.native_to_screen_ratio = la.min(res_ratio.x, res_ratio.y)
+    rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
+    
     // Adding test level geometry
     append(&game_ctx.collision_bodies, CollisionBody{
         box = {
-            rectangle = { 128, 32, SPRITE_SCALE * 16, SPRITE_SCALE * 16 },
+            rectangle = { 64, 32, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
         kind = .Static})
     append(&game_ctx.collision_bodies, CollisionBody{ 
         box = {
-            rectangle ={ 128, 168, SPRITE_SCALE * 16, SPRITE_SCALE * 16 },
+            rectangle ={ 64, 64, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
         kind = .Static})
     append(&game_ctx.collision_bodies, CollisionBody{ 
         box = {
-            rectangle = { 128, 304, SPRITE_SCALE * 16, SPRITE_SCALE * 16 },
+            rectangle = { 64, 96, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
         kind = .Static})
     append(&game_ctx.collision_bodies, CollisionBody{ 
         box = {
-            rectangle = { 128, 440, SPRITE_SCALE * 16, SPRITE_SCALE * 16 },
+            rectangle = { 64, 128, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
         kind = .Static})
     append(&game_ctx.collision_bodies, CollisionBody{ 
         box = {
-            rectangle = { 500, 500, SPRITE_SCALE * 16, SPRITE_SCALE * 16 },
+            rectangle = { 96, 128, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
@@ -153,15 +171,15 @@ init :: proc() {
         game_ctx.player.kinematic_body = { 
             collision_body = { 
                 box = { 
-                    rectangle = {32, 32, 3.0 * 16, 3.0 * 16},
+                    rectangle = {32, 32, 12, 12},
                     line_thickness = 1,
                     color = rl.BLACK,
                     state = .None }, 
                 kind = .Slide, 
             }, 
-            acc = 12.0,
+            acc = (8.0 / f32(game_ctx.native_to_screen_ratio)),
         }
-        game_ctx.player.max_speed = 12.0
+        game_ctx.player.max_speed = (6.0 / f32(game_ctx.native_to_screen_ratio))
     }
 
 	rl.InitAudioDevice()
@@ -175,23 +193,7 @@ update :: proc() {
     dt := rl.GetFrameTime()
     handle_player_input(dt)
     physics_update(dt)
-    rl.BeginDrawing()
-	    rl.ClearBackground({0, 120, 153, 255})
-        for body in game_ctx.collision_bodies {
-            box_draw(body.box)
-        }
-        update_atlas_anim(&game_ctx.player.render.anim, dt)
-        draw_atlas_anim_at_pos(
-            game_ctx.player.render.anim, 
-            game_ctx.player.kinematic_body.collision_body.box.rectangle.xy, 
-            { -10, -30 },
-            game_ctx.atlas,
-        )
-
-        // DEBUG Player collision Box
-        //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
-	rl.EndDrawing()
-
+    draw_frame(dt)
 	free_all(context.temp_allocator)
 }
 
@@ -203,6 +205,7 @@ parent_window_size_changed :: proc(w, h: int) {
 
 shutdown :: proc() {
 	rl.CloseWindow()
+    rl.UnloadRenderTexture(game_ctx.level_render)
 }
 
 should_run :: proc() -> bool {
@@ -246,8 +249,8 @@ draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atl
 	dest := Rect {
 		pos.x + atlas_offset.x + offset.x,
 		pos.y + atlas_offset.y + offset.y,
-		anim_texture.rect.width * SPRITE_SCALE,
-		anim_texture.rect.height * SPRITE_SCALE,
+		anim_texture.rect.width,
+		anim_texture.rect.height,
 	}
 	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, rl.WHITE)
 }
