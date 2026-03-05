@@ -58,14 +58,14 @@ Atlas_Texture :: struct {
 
 atlas_textures: [Texture_Name]Atlas_Texture = {
 	.None = {},
-	.Player0 = { rect = {291, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
-	.Player1 = { rect = {265, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
-	.Player2 = { rect = {330, 120, 11, 18}, offset_top = 7, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
-	.Player3 = { rect = {342, 120, 11, 18}, offset_top = 7, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
-	.Player4 = { rect = {317, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
+	.Player0 = { rect = {317, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
+	.Player1 = { rect = {330, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
+	.Player2 = { rect = {343, 120, 12, 18}, offset_top = 7, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
+	.Player3 = { rect = {356, 120, 12, 18}, offset_top = 7, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
+	.Player4 = { rect = {369, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player5 = { rect = {304, 120, 12, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
-	.Player6 = { rect = {366, 120, 11, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 11, document_size = {32, 32}, duration = 0.100},
-	.Player7 = { rect = {354, 120, 11, 18}, offset_top = 7, offset_right = 10, offset_bottom = 7, offset_left = 11, document_size = {32, 32}, duration = 0.100},
+	.Player6 = { rect = {291, 120, 12, 18}, offset_top = 7, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
+	.Player7 = { rect = {265, 120, 12, 18}, offset_top = 7, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
 }
 
 Animation_Name :: enum {

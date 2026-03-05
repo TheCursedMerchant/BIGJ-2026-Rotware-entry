@@ -17,7 +17,9 @@ RenderTexture :: rl.RenderTexture2D
 
 Player :: struct {
     render          : Render,
+    dir_anims       : [DirectionInputKind]Animation_Name,
     kinematic_body  : KinematicBody,
+    last_dir_input  : DirectionInput,
     prev_dir        : [2]int,
     prev_pos        : [2]f32,
     max_speed       : f32,
@@ -27,19 +29,6 @@ Render :: struct {
     anim    : Animation,
     pos     : [2]f32,
     offset  : [2]f32,
-}
-
-InputKind :: enum {
-    Up,
-    Down,
-    Left,
-    Right,
-}
-
-Input :: struct {
-    key : rl.KeyboardKey,
-    dir : [2]int,
-    kind : InputKind,
 }
 
 Context :: struct {
@@ -57,31 +46,17 @@ Context :: struct {
 run: bool
 game_ctx : ^Context
 
-inputs := [InputKind]Input {
-    .Up = { .W, {0, -1}, .Up },
-    .Down = { .S, {0, 1}, .Down },
-    .Left = { .A, {-1, 0}, .Left },
-    .Right = { .D, {1, 0}, .Right },
-}
-
-is_input_pressed :: proc(input : Input) -> bool {
-    return rl.IsKeyPressed(input.key)
-}
-
-is_input_down :: proc(input : Input) -> bool {
-    return rl.IsKeyDown(input.key)
-}
-
 handle_player_input :: proc(dt: f32) {
     mv_dir : [2]int
     player := &game_ctx.player
     has_mv_event : bool
-    for i in inputs {
+    for i in dir_inputs {
         if is_input_down(i) {
             switch i.kind {
             case .Up, .Down, .Left, .Right :
                 has_mv_event = true
                 mv_dir += i.dir
+                player.last_dir_input = i
             }
         }
     }
@@ -92,6 +67,8 @@ handle_player_input :: proc(dt: f32) {
         player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
         // Smooths jitter when changing directions
         if player.prev_dir != mv_dir {
+            // When we change direction change our animation
+            player.render.anim = create_atlas_anim(player.dir_anims[player.last_dir_input.kind])
             player.kinematic_body.collision_body.box.rectangle.xy = la.round(player.kinematic_body.collision_body.box.rectangle.xy)
         }
         player.prev_dir = mv_dir
@@ -116,6 +93,30 @@ init_game_ctx :: proc() {
     game_ctx.unit_size = 1.0 / game_ctx.native_to_screen_ratio
     rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
     game_ctx.update_timer = FIXED_TIME_STEP
+}
+
+init_player :: proc() {
+    game_ctx.player = Player {
+        render = { anim = create_atlas_anim(.Player_Idle_Down, true) },
+        dir_anims = { 
+            .Up = .Player_Idle_Up,
+            .Down = .Player_Idle_Down,
+            .Left = .Player_Idle_Left,
+            .Right = .Player_Idle_Right,
+        },
+        max_speed = 3.0,
+        kinematic_body = { 
+            collision_body = { 
+                box = { 
+                    rectangle = {32, 32, 12, 12},
+                    line_thickness = 1,
+                    color = rl.BLACK,
+                    state = .None }, 
+                kind = .Slide, 
+            }, 
+            acc = 12.0,
+        },
+    }
 }
 
 init :: proc() {
@@ -168,21 +169,8 @@ init :: proc() {
         game_ctx.atlas = rl.LoadTextureFromImage(atlas_image)
         rl.UnloadImage(atlas_image)
         game_ctx.font = load_atlased_font(game_ctx.atlas)
-
+        init_player()
         // Init Player
-        game_ctx.player.render.anim = create_atlas_anim(.Player_Idle_Down, true)
-        game_ctx.player.kinematic_body = { 
-            collision_body = { 
-                box = { 
-                    rectangle = {32, 32, 12, 12},
-                    line_thickness = 1,
-                    color = rl.BLACK,
-                    state = .None }, 
-                kind = .Slide, 
-            }, 
-            acc = 12.0,
-        }
-        game_ctx.player.max_speed = 3.0
     }
 
 	rl.InitAudioDevice()
