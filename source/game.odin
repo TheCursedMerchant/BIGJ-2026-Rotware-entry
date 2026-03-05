@@ -208,10 +208,10 @@ update :: proc() {
 // In a web build, this is called when browser changes size. Remove the
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
-	rl.SetWindowSize(c.int(w), c.int(h))
-    screen_size := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
-    new_res := screen_size / game_ctx.native_res
-    game_ctx.native_to_screen_ratio = la.min(new_res.x, new_res.y)
+//	rl.SetWindowSize(c.int(w), c.int(h))
+//    screen_size := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
+//    new_res := screen_size / game_ctx.native_res
+//    game_ctx.native_to_screen_ratio = la.min(new_res.x, new_res.y)
 }
 
 shutdown :: proc() {
