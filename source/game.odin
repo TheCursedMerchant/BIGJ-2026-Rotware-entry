@@ -5,7 +5,8 @@ import "core:log"
 import "core:c"
 import la "core:math/linalg"
 
-SPRITE_SCALE :: 4.0
+TARGET_FPS :: 30
+FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
 
 // Alias's
 Font :: rl.Font
@@ -18,6 +19,7 @@ Player :: struct {
     render          : Render,
     kinematic_body  : KinematicBody,
     prev_dir        : [2]int,
+    prev_pos        : [2]f32,
     max_speed       : f32,
 }
 
@@ -47,7 +49,9 @@ Context :: struct {
     font                    : Font,
     player                  : Player,
     native_res              : [2]i32,
-    native_to_screen_ratio  : i32,
+    native_to_screen_ratio  : f32,
+    unit_size               : f32,
+    update_timer            : f32,
 }
 
 run: bool
@@ -82,55 +86,46 @@ handle_player_input :: proc(dt: f32) {
         }
     }
 
-    if !has_mv_event {
-        player.kinematic_body.vel.x = approach(player.kinematic_body.vel.x, 0.0, DRAG * dt)
-        player.kinematic_body.vel.y = approach(player.kinematic_body.vel.y, 0.0, DRAG * dt)
-    } else {
-        target_vel := arr_cast(mv_dir, f32) * player.max_speed / f32(game_ctx.native_to_screen_ratio)
+    if has_mv_event {
+        target_vel := arr_cast(mv_dir, f32) * player.max_speed
         vel_diff := target_vel - player.kinematic_body.vel
-        player.kinematic_body.vel += vel_diff * (player.kinematic_body.acc * f32(game_ctx.native_to_screen_ratio)) * dt
+        player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
+        // Smooths jitter when changing directions
         if player.prev_dir != mv_dir {
             player.kinematic_body.collision_body.box.rectangle.xy = la.round(player.kinematic_body.collision_body.box.rectangle.xy)
         }
         player.prev_dir = mv_dir
+    } else {
+        player.kinematic_body.vel.x = approach(player.kinematic_body.vel.x, 0.0, DRAG * dt)
+        player.kinematic_body.vel.y = approach(player.kinematic_body.vel.y, 0.0, DRAG * dt)
     }
 }
 
 physics_update :: proc (dt: f32) {
+    game_ctx.player.prev_pos = game_ctx.player.kinematic_body.collision_body.box.rectangle.xy
     move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
 }
 
-in_screen_bounds :: proc (pos: [2]f32) -> bool {
-    return pos.x >= 0 && pos.x < f32(rl.GetScreenWidth()) && pos.y >= 0 && pos.y < f32(rl.GetScreenHeight())
-}
-
-arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
-    out : [N]S
-    for val, idx in arr {
-        out[idx] = S(val)
-    }
-    return out
-}
-
-box_to_rect :: proc(box: Box) -> rl.Rectangle {
-    return rl.Rectangle{ box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w }
+init_game_ctx :: proc() {
+    screen_res := [2]i32{ 640, 360 }
+    game_ctx = new(Context)
+    game_ctx.native_res = [2]i32{ 640, 360 } 
+    res_ratio := screen_res / game_ctx.native_res
+    game_ctx.level_render = rl.LoadRenderTexture(game_ctx.native_res.x, game_ctx.native_res.y)
+    game_ctx.native_to_screen_ratio = la.min(f32(res_ratio.x), f32(res_ratio.y))
+    game_ctx.unit_size = 1.0 / game_ctx.native_to_screen_ratio
+    rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
+    game_ctx.update_timer = FIXED_TIME_STEP
 }
 
 init :: proc() {
 	run = true
-    screen_res := [2]i32{ 1920, 1080 }
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
-	rl.InitWindow(screen_res.x, screen_res.y, "Odin + Raylib on the web")
-    rl.SetTargetFPS(60)
-    
-    game_ctx = new(Context)
-    game_ctx.native_res = [2]i32{ 480, 270 } 
-    res_ratio := screen_res / game_ctx.native_res
-    game_ctx.level_render = rl.LoadRenderTexture(game_ctx.native_res.x, game_ctx.native_res.y)
-    game_ctx.native_to_screen_ratio = la.min(res_ratio.x, res_ratio.y)
-    log.infof("Scaled ratio is : %v", game_ctx.native_to_screen_ratio)
-    rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
-    
+	rl.InitWindow(640, 360, "Odin + Raylib on the web")
+    rl.SetTargetFPS(120)
+
+    init_game_ctx()
+
     // Adding test level geometry
     append(&game_ctx.collision_bodies, CollisionBody{
         box = {
@@ -185,9 +180,9 @@ init :: proc() {
                     state = .None }, 
                 kind = .Slide, 
             }, 
-            acc = 8.0,
+            acc = 12.0,
         }
-        game_ctx.player.max_speed = 4.0
+        game_ctx.player.max_speed = 3.0
     }
 
 	rl.InitAudioDevice()
@@ -199,19 +194,29 @@ init :: proc() {
 
 update :: proc() {
     dt := rl.GetFrameTime()
-    handle_player_input(dt)
-    physics_update(dt)
-    draw_frame(dt)
+
+    game_ctx.update_timer += dt 
+
+    for game_ctx.update_timer >= FIXED_TIME_STEP {
+        game_ctx.update_timer -= FIXED_TIME_STEP
+        handle_player_input(FIXED_TIME_STEP)
+        physics_update(FIXED_TIME_STEP)
+    }
+
+    interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
+
+    draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
 }
 
 // In a web build, this is called when browser changes size. Remove the
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
-//	rl.SetWindowSize(c.int(w), c.int(h))
-//    screen_size := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
-//    new_res := screen_size / game_ctx.native_res
-//    game_ctx.native_to_screen_ratio = la.min(new_res.x, new_res.y)
+    rl.SetWindowSize(c.int(w), c.int(h))
+    screen_size := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
+    new_res := screen_size / game_ctx.native_res
+    game_ctx.native_to_screen_ratio = la.min(f32(new_res.x), f32(new_res.y))
+    game_ctx.unit_size = 1.0 / game_ctx.native_to_screen_ratio
 }
 
 shutdown :: proc() {
@@ -253,15 +258,19 @@ load_atlased_font :: proc(atlas: Texture) -> Font {
 	}
 }
 
-draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atlas: Texture) {
-	anim_texture := anim_atlas_texture(anim)
-	atlas_rect := anim_texture.rect
-	atlas_offset := [2]f32{anim_texture.offset_left, anim_texture.offset_top}
-	dest := Rect {
-		pos.x + atlas_offset.x + offset.x,
-		pos.y + atlas_offset.y + offset.y,
-		anim_texture.rect.width,
-		anim_texture.rect.height,
-	}
-	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, rl.WHITE)
+// Utils
+in_screen_bounds :: proc (pos: [2]f32) -> bool {
+    return pos.x >= 0 && pos.x < f32(rl.GetScreenWidth()) && pos.y >= 0 && pos.y < f32(rl.GetScreenHeight())
+}
+
+arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
+    out : [N]S
+    for val, idx in arr {
+        out[idx] = S(val)
+    }
+    return out
+}
+
+box_to_rect :: proc(box: Box) -> rl.Rectangle {
+    return rl.Rectangle{ box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w }
 }
