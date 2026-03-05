@@ -2,7 +2,7 @@ package game
 
 // Imports
 import rl "vendor:raylib"
-
+import "core:slice"
 
 // Constants
 
@@ -111,4 +111,27 @@ box_smallest_containing_position :: proc(rect: Rectangle, arr: []Box) -> (index:
         }
     }
     return smallest.key, true
+}
+
+boxes_all_containing_position :: proc(rect: Rectangle, arr: []Box) -> (boxes: []Box) {
+    filter : [dynamic]Box; defer{delete(filter)}
+    for i in 0..<len(arr) {
+        if box_contains_position(rect, arr[i]) {
+            append(&filter, arr[i])
+        }
+    }
+    boxes = filter[:]
+    return
+}
+
+box_state_determine :: proc(arr: []Box) -> (state: Box_State) {
+    states : [dynamic]Box_State; defer{delete(states)}
+    for i in arr {
+        if !slice.contains(states[:], i.state) {
+            append(&states, i.state)
+        }
+    }
+    
+
+    return
 }
