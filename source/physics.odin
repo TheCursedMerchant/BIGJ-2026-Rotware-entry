@@ -3,7 +3,7 @@ import la "core:math/linalg"
 
 // Check for Collisions
 MAX_ITERS :: 4
-DRAG : f32 : 60.0
+DRAG : f32 : 32.0
 
 CollisionBodyKind :: enum { Static, Slide }
 
@@ -21,7 +21,7 @@ CollisionBody :: struct {
 
 move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
     kb.remainder.x += kb.vel.x
-    move := la.round(kb.remainder.x)
+    move := la.floor(kb.remainder.x)
 
     if (move != 0) {
         kb.remainder.x -= f32(move)
@@ -52,7 +52,7 @@ move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
 
 move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
     kb.remainder.y += kb.vel.y
-    move := la.round(kb.remainder.y)
+    move := la.floor(kb.remainder.y)
 
     if (move != 0) {
         kb.remainder.y -= f32(move)

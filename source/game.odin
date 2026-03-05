@@ -17,6 +17,7 @@ RenderTexture :: rl.RenderTexture2D
 Player :: struct {
     render          : Render,
     kinematic_body  : KinematicBody,
+    prev_dir        : [2]int,
     max_speed       : f32,
 }
 
@@ -45,7 +46,8 @@ Context :: struct {
     atlas                   : Texture,
     font                    : Font,
     player                  : Player,
-    native_to_screen_ratio  : i32, 
+    native_res              : [2]i32,
+    native_to_screen_ratio  : i32,
 }
 
 run: bool
@@ -67,7 +69,7 @@ is_input_down :: proc(input : Input) -> bool {
 }
 
 handle_player_input :: proc(dt: f32) {
-    mv_dir : [2]f32
+    mv_dir : [2]int
     player := &game_ctx.player
     has_mv_event : bool
     for i in inputs {
@@ -75,10 +77,7 @@ handle_player_input :: proc(dt: f32) {
             switch i.kind {
             case .Up, .Down, .Left, .Right :
                 has_mv_event = true
-                mv_dir = arr_cast(i.dir, f32)
-                target_vel := mv_dir * player.max_speed
-                vel_diff := target_vel - player.kinematic_body.vel
-                player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
+                mv_dir += i.dir
             }
         }
     }
@@ -86,6 +85,14 @@ handle_player_input :: proc(dt: f32) {
     if !has_mv_event {
         player.kinematic_body.vel.x = approach(player.kinematic_body.vel.x, 0.0, DRAG * dt)
         player.kinematic_body.vel.y = approach(player.kinematic_body.vel.y, 0.0, DRAG * dt)
+    } else {
+        target_vel := arr_cast(mv_dir, f32) * player.max_speed / f32(game_ctx.native_to_screen_ratio)
+        vel_diff := target_vel - player.kinematic_body.vel
+        player.kinematic_body.vel += vel_diff * (player.kinematic_body.acc * f32(game_ctx.native_to_screen_ratio)) * dt
+        if player.prev_dir != mv_dir {
+            player.kinematic_body.collision_body.box.rectangle.xy = la.round(player.kinematic_body.collision_body.box.rectangle.xy)
+        }
+        player.prev_dir = mv_dir
     }
 }
 
@@ -117,10 +124,11 @@ init :: proc() {
     rl.SetTargetFPS(60)
     
     game_ctx = new(Context)
-    native_res := [2]i32{ 480, 270 } 
-    res_ratio := screen_res / native_res
-    game_ctx.level_render = rl.LoadRenderTexture(native_res.x, native_res.y)
+    game_ctx.native_res = [2]i32{ 480, 270 } 
+    res_ratio := screen_res / game_ctx.native_res
+    game_ctx.level_render = rl.LoadRenderTexture(game_ctx.native_res.x, game_ctx.native_res.y)
     game_ctx.native_to_screen_ratio = la.min(res_ratio.x, res_ratio.y)
+    log.infof("Scaled ratio is : %v", game_ctx.native_to_screen_ratio)
     rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
     
     // Adding test level geometry
@@ -177,9 +185,9 @@ init :: proc() {
                     state = .None }, 
                 kind = .Slide, 
             }, 
-            acc = (8.0 / f32(game_ctx.native_to_screen_ratio)),
+            acc = 8.0,
         }
-        game_ctx.player.max_speed = (6.0 / f32(game_ctx.native_to_screen_ratio))
+        game_ctx.player.max_speed = 4.0
     }
 
 	rl.InitAudioDevice()
@@ -201,6 +209,9 @@ update :: proc() {
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
 	rl.SetWindowSize(c.int(w), c.int(h))
+    screen_size := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
+    new_res := screen_size / game_ctx.native_res
+    game_ctx.native_to_screen_ratio = la.min(new_res.x, new_res.y)
 }
 
 shutdown :: proc() {
