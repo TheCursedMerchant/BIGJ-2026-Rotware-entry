@@ -84,9 +84,9 @@ physics_update :: proc (dt: f32) {
 }
 
 init_game_ctx :: proc() {
-    screen_res := [2]i32{ 640, 360 }
+    screen_res := [2]i32{ 768, 432 }
     game_ctx = new(Context)
-    game_ctx.native_res = [2]i32{ 640, 360 } 
+    game_ctx.native_res = [2]i32{ 768, 432 } 
     res_ratio := screen_res / game_ctx.native_res
     game_ctx.level_render = rl.LoadRenderTexture(game_ctx.native_res.x, game_ctx.native_res.y)
     game_ctx.native_to_screen_ratio = la.min(f32(res_ratio.x), f32(res_ratio.y))
