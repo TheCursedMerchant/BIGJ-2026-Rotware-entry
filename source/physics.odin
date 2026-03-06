@@ -3,15 +3,14 @@ import la "core:math/linalg"
 
 // Check for Collisions
 MAX_ITERS :: 4
-DRAG : f32 : 40.0
+DRAG : f32 : 60.0
 
 CollisionBodyKind :: enum { Static, Slide }
 
 KinematicBody :: struct {
     collision_body  : CollisionBody,
-    vel             : [2]f32,
-    acc             : f32,
     remainder       : [2]f32,
+    vel             : [2]f32,
 }
 
 CollisionBody :: struct {

@@ -7,6 +7,8 @@ import la "core:math/linalg"
 
 TARGET_FPS :: 30
 FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
+TARGET_RES :: [2]i32 { 768, 432 }
+NATIVE_RES :: [2]i32{ 256, 144 }
 
 // Alias's
 Font :: rl.Font
@@ -22,7 +24,7 @@ Player :: struct {
     last_dir_input  : DirectionInput,
     prev_dir        : [2]int,
     prev_pos        : [2]f32,
-    max_speed       : f32,
+    speed           : f32,
 }
 
 Render :: struct {
@@ -62,19 +64,14 @@ handle_player_input :: proc(dt: f32) {
     }
 
     if has_mv_event {
-        target_vel := arr_cast(mv_dir, f32) * player.max_speed
-        vel_diff := target_vel - player.kinematic_body.vel
-        player.kinematic_body.vel += vel_diff * player.kinematic_body.acc * dt
-        // Smooths jitter when changing directions
+        target_vel := arr_cast(mv_dir, f32) * player.speed
+        player.kinematic_body.vel = target_vel
         if player.prev_dir != mv_dir {
-            // When we change direction change our animation
             player.render.anim = create_atlas_anim(player.dir_anims[player.last_dir_input.kind])
-            player.kinematic_body.collision_body.box.rectangle.xy = la.round(player.kinematic_body.collision_body.box.rectangle.xy)
+            player.prev_dir = mv_dir
         }
-        player.prev_dir = mv_dir
     } else {
-        player.kinematic_body.vel.x = approach(player.kinematic_body.vel.x, 0.0, DRAG * dt)
-        player.kinematic_body.vel.y = approach(player.kinematic_body.vel.y, 0.0, DRAG * dt)
+        player.kinematic_body.vel = 0
     }
 }
 
@@ -84,9 +81,9 @@ physics_update :: proc (dt: f32) {
 }
 
 init_game_ctx :: proc() {
-    screen_res := [2]i32{ 768, 432 }
+    screen_res := TARGET_RES
     game_ctx = new(Context)
-    game_ctx.native_res = [2]i32{ 768, 432 } 
+    game_ctx.native_res = NATIVE_RES 
     res_ratio := screen_res / game_ctx.native_res
     game_ctx.level_render = rl.LoadRenderTexture(game_ctx.native_res.x, game_ctx.native_res.y)
     game_ctx.native_to_screen_ratio = la.min(f32(res_ratio.x), f32(res_ratio.y))
@@ -104,17 +101,16 @@ init_player :: proc() {
             .Left = .Player_Idle_Left,
             .Right = .Player_Idle_Right,
         },
-        max_speed = 3.0,
-        kinematic_body = { 
-            collision_body = { 
-                box = { 
+        speed = 2.0,
+        kinematic_body = {
+            collision_body = {
+                box = {
                     rectangle = {32, 32, 12, 12},
                     line_thickness = 1,
                     color = rl.BLACK,
-                    state = .None }, 
-                kind = .Slide, 
-            }, 
-            acc = 12.0,
+                    state = .None },
+                kind = .Slide,
+            },
         },
     }
 }
@@ -122,7 +118,7 @@ init_player :: proc() {
 init :: proc() {
 	run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
-	rl.InitWindow(640, 360, "Odin + Raylib on the web")
+	rl.InitWindow(TARGET_RES.x, TARGET_RES.y, "Kick Boxing")
     rl.SetTargetFPS(120)
 
     init_game_ctx()
@@ -130,14 +126,21 @@ init :: proc() {
     // Adding test level geometry
     append(&game_ctx.collision_bodies, CollisionBody{
         box = {
-            rectangle = { 64, 32, 16, 16 },
+            rectangle = { 64, 0, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
         kind = .Static})
     append(&game_ctx.collision_bodies, CollisionBody{ 
         box = {
-            rectangle ={ 64, 64, 16, 16 },
+            rectangle ={ 64, 32, 16, 16 },
+            line_thickness = 1,
+            color = rl.BLACK,
+            state = .None}, 
+        kind = .Static})
+    append(&game_ctx.collision_bodies, CollisionBody{ 
+        box = {
+            rectangle = { 64, 64, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
@@ -151,14 +154,7 @@ init :: proc() {
         kind = .Static})
     append(&game_ctx.collision_bodies, CollisionBody{ 
         box = {
-            rectangle = { 64, 128, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 96, 128, 16, 16 },
+            rectangle = { 96, 96, 16, 16 },
             line_thickness = 1,
             color = rl.BLACK,
             state = .None}, 
