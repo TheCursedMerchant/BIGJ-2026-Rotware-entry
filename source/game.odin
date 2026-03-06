@@ -3,12 +3,11 @@ package game
 import rl "vendor:raylib"
 import "core:log"
 import "core:c"
-import la "core:math/linalg"
 
 TARGET_FPS :: 30
 FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
 TARGET_RES :: [2]i32 { 768, 432 }
-NATIVE_RES :: [2]i32{ 256, 144 }
+NATIVE_RES :: [2]i32{ 768, 432 }
 
 // Alias's
 Font :: rl.Font
@@ -16,6 +15,17 @@ Texture :: rl.Texture
 Rect :: rl.Rectangle
 GlyphInfo :: rl.GlyphInfo
 RenderTexture :: rl.RenderTexture2D
+Camera :: rl.Camera2D
+
+Context :: struct {
+    collision_bodies        : [dynamic]CollisionBody,
+    level_render            : RenderTexture,
+    atlas                   : Texture,
+    font                    : Font,
+    player                  : Player,
+    camera                  : FollowCamera,
+    update_timer            : f32,
+}
 
 Player :: struct {
     render          : Render,
@@ -33,88 +43,8 @@ Render :: struct {
     offset  : [2]f32,
 }
 
-Context :: struct {
-    collision_bodies        : [dynamic]CollisionBody,
-    level_render            : RenderTexture,
-    atlas                   : Texture,
-    font                    : Font,
-    player                  : Player,
-    native_res              : [2]i32,
-    native_to_screen_ratio  : f32,
-    unit_size               : f32,
-    update_timer            : f32,
-}
-
 run: bool
 game_ctx : ^Context
-
-handle_player_input :: proc(dt: f32) {
-    mv_dir : [2]int
-    player := &game_ctx.player
-    has_mv_event : bool
-    for i in dir_inputs {
-        if is_input_down(i) {
-            switch i.kind {
-            case .Up, .Down, .Left, .Right :
-                has_mv_event = true
-                mv_dir += i.dir
-                player.last_dir_input = i
-            }
-        }
-    }
-
-    if has_mv_event {
-        target_vel := arr_cast(mv_dir, f32) * player.speed
-        player.kinematic_body.vel = target_vel
-        if player.prev_dir != mv_dir {
-            player.render.anim = create_atlas_anim(player.dir_anims[player.last_dir_input.kind])
-            player.prev_dir = mv_dir
-        }
-    } else {
-        player.kinematic_body.vel = 0
-    }
-}
-
-physics_update :: proc (dt: f32) {
-    game_ctx.player.prev_pos = game_ctx.player.kinematic_body.collision_body.box.rectangle.xy
-    move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
-}
-
-init_game_ctx :: proc() {
-    screen_res := TARGET_RES
-    game_ctx = new(Context)
-    game_ctx.native_res = NATIVE_RES 
-    res_ratio := screen_res / game_ctx.native_res
-    game_ctx.level_render = rl.LoadRenderTexture(game_ctx.native_res.x, game_ctx.native_res.y)
-    game_ctx.native_to_screen_ratio = la.min(f32(res_ratio.x), f32(res_ratio.y))
-    game_ctx.unit_size = 1.0 / game_ctx.native_to_screen_ratio
-    rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
-    game_ctx.update_timer = FIXED_TIME_STEP
-}
-
-init_player :: proc() {
-    game_ctx.player = Player {
-        render = { anim = create_atlas_anim(.Player_Idle_Down, true) },
-        dir_anims = { 
-            .Up = .Player_Idle_Up,
-            .Down = .Player_Idle_Down,
-            .Left = .Player_Idle_Left,
-            .Right = .Player_Idle_Right,
-        },
-        speed = 2.0,
-        kinematic_body = {
-            collision_body = {
-                box = {
-                    rectangle = {32, 32, 12, 12},
-                    line_thickness = 1,
-                    color = rl.BLACK,
-                    state = .None },
-                kind = .Slide,
-            },
-        },
-    }
-}
-
 init :: proc() {
 	run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
@@ -166,7 +96,7 @@ init :: proc() {
         rl.UnloadImage(atlas_image)
         game_ctx.font = load_atlased_font(game_ctx.atlas)
         init_player()
-        // Init Player
+        game_ctx.camera.target = get_render_center(game_ctx.player.render)
     }
 
 	rl.InitAudioDevice()
@@ -176,10 +106,55 @@ init :: proc() {
     }
 }
 
+init_game_ctx :: proc() {
+    screen_res := TARGET_RES
+    game_ctx = new(Context)
+    game_ctx.level_render = rl.LoadRenderTexture(NATIVE_RES.x, NATIVE_RES.y)
+    rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
+    game_ctx.update_timer = FIXED_TIME_STEP
+    game_ctx.camera.camera = Camera {
+		offset = (arr_cast(screen_res, f32) / 2),
+		target = {0, 0},
+		zoom   = 2.0,
+	}
+}
+
+init_player :: proc() {
+    game_ctx.player = Player {
+        render = { 
+            anim = create_atlas_anim(.Player_Idle_Down, true),
+            offset = { -10, -12 },
+        },
+        dir_anims = { 
+            .Up = .Player_Idle_Up,
+            .Down = .Player_Idle_Down,
+            .Left = .Player_Idle_Left,
+            .Right = .Player_Idle_Right,
+        },
+        speed = 2.0,
+        kinematic_body = {
+            collision_body = {
+                box = {
+                    rectangle = {32, 32, 12, 12},
+                    line_thickness = 1,
+                    color = rl.BLACK,
+                    state = .None },
+                kind = .Slide,
+            },
+        },
+    }
+}
+
 update :: proc() {
     dt := rl.GetFrameTime()
+    game_ctx.update_timer += dt
 
-    game_ctx.update_timer += dt 
+    // TODO: Remove testing only
+    if rl.IsKeyPressed(.N) {
+        game_ctx.camera.zoom += 1.0
+    } else if rl.IsKeyPressed(.M) {
+        game_ctx.camera.zoom -= 1.0
+    }
 
     for game_ctx.update_timer >= FIXED_TIME_STEP {
         game_ctx.update_timer -= FIXED_TIME_STEP
@@ -189,18 +164,47 @@ update :: proc() {
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
 
+    update_camera(game_ctx, dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
+}
+
+handle_player_input :: proc(dt: f32) {
+    mv_dir : [2]int
+    player := &game_ctx.player
+    has_mv_event : bool
+    for i in dir_inputs {
+        if is_input_down(i) {
+            switch i.kind {
+            case .Up, .Down, .Left, .Right :
+                has_mv_event = true
+                mv_dir += i.dir
+                player.last_dir_input = i
+            }
+        }
+    }
+
+    if has_mv_event {
+        target_vel := arr_cast(mv_dir, f32) * player.speed
+        player.kinematic_body.vel = target_vel
+        if player.prev_dir != mv_dir {
+            player.render.anim = create_atlas_anim(player.dir_anims[player.last_dir_input.kind])
+            player.prev_dir = mv_dir
+        }
+    } else {
+        player.kinematic_body.vel = 0
+    }
+}
+
+physics_update :: proc (dt: f32) {
+    game_ctx.player.prev_pos = game_ctx.player.kinematic_body.collision_body.box.rectangle.xy
+    move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
 }
 
 // In a web build, this is called when browser changes size. Remove the
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
     rl.SetWindowSize(c.int(w), c.int(h))
-    screen_size := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
-    new_res := screen_size / game_ctx.native_res
-    game_ctx.native_to_screen_ratio = la.min(f32(new_res.x), f32(new_res.y))
-    game_ctx.unit_size = 1.0 / game_ctx.native_to_screen_ratio
 }
 
 shutdown :: proc() {

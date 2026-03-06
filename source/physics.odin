@@ -103,3 +103,20 @@ approach :: proc(current, target, increase : f32) -> f32 {
     return max(current - increase, target)
 }
 
+get_pos :: proc {
+    get_pos_player,
+    get_pos_kinematic_body,
+    get_pos_collision_body,
+}
+
+get_pos_player :: proc(player: Player) -> [2]f32 {
+    return get_pos_kinematic_body(player.kinematic_body)
+}
+
+get_pos_kinematic_body :: proc(kb: KinematicBody) -> [2]f32 {
+    return get_pos_collision_body(kb.collision_body)
+}
+
+get_pos_collision_body :: proc(c_body: CollisionBody) -> [2]f32 {
+    return c_body.box.rectangle.xy
+}
