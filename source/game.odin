@@ -156,9 +156,10 @@ update :: proc() {
         game_ctx.camera.zoom -= 1.0
     }
 
+    handle_player_input(FIXED_TIME_STEP)
+
     for game_ctx.update_timer >= FIXED_TIME_STEP {
         game_ctx.update_timer -= FIXED_TIME_STEP
-        handle_player_input(FIXED_TIME_STEP)
         physics_update(FIXED_TIME_STEP)
     }
 
