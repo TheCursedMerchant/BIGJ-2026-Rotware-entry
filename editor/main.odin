@@ -25,45 +25,25 @@ View :: struct {
     scale               : f32,
 }
 
-ViewGrid :: struct($ROW, $COL: int, $DATA: typeid) {
-    cells       : [ROW][COL]ViewCell(DATA),
-    cell_dim    : [2]int,
-    cell_color  : Color,
-}
-
-ViewCell :: struct($T: typeid) {
-    using drawable : Drawable,
-    data : T,
-}
-
 Drawable :: struct {
     rect : Rect,
     color : Color,
 }
 
-Panel :: struct {
-    grid : ViewGrid(PANEL_DIM.x, PANEL_DIM.y, int),
-    using draw : Drawable,
-}
+Panel :: ViewGrid(PANEL_DIM.x, PANEL_DIM.y, int)
+SceneView :: ViewGrid(SCENE_CELL_SIZE.x, SCENE_CELL_SIZE.y, SceneItem)
 
-SceneView :: struct {
-    grid : ViewGrid(SCENE_CELL_SIZE.x, SCENE_CELL_SIZE.y, SceneCellData),
-    cell_size : [2]i32,
-    cell_color : Color,
-    rect : Rect,
-}
-
-SceneCellOption :: enum { Ent, Tile }
-SceneCellData :: struct {
+SceneItemOption :: enum { Ent, Tile }
+SceneItem :: struct {
     tile_id     : TileTextureName,
     ent_id      : EntTextureName,
-    options     : bit_set[SceneCellOption],
+    options     : bit_set[SceneItemOption],
 }
 
 Cursor :: struct {
     texture : Texture,
     id      : int,
-    options : bit_set[SceneCellOption],
+    options : bit_set[SceneItemOption],
 }
 
 TileTextureName :: enum {
@@ -124,8 +104,8 @@ main :: proc() {
     view := View {
         ent_panel_items = make([dynamic]EntPanelItem, 0),
         tile_panel_items = make([dynamic]TilePanelItem, 0),
-        panel = { grid = { cell_color = rl.WHITE }, color = rl.WHITE  },
-        scene_view = { cell_size = { NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }, cell_color = rl.WHITE },
+        panel = { color = rl.WHITE, cell_color = rl.WHITE },
+        scene_view = { cell_dim = { NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }, cell_color = rl.WHITE },
         scale = 3.0
     }
 
@@ -137,21 +117,14 @@ main :: proc() {
     }
 
     // Init Scene View
-    view.scene_view.rect.zw = { len(view.scene_view.grid.cells), len(view.scene_view.grid.cells[0]) } * NATIVE_TILE_SIZE * view.scale
+    view.scene_view.rect.zw = { len(view.scene_view.cells), len(view.scene_view.cells[0]) } * NATIVE_TILE_SIZE * view.scale
     view.scene_view.rect.xy = screen_center
     center_rect(&view.scene_view.rect)
-    n_cell_pos : [2]i32
-    for &cells, x in view.scene_view.grid.cells {
-        for &cell, y in cells {
-            n_cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * view.scene_view.cell_size * i32(view.scale))
-            cell.rect.xy = arr_cast(n_cell_pos, f32)
-            cell.rect.zw = arr_cast(view.scene_view.cell_size * i32(view.scale), f32)
-        }
-    }
+    init_view_grid(&view.scene_view, view.scale)
 
     // Init Panel
     view.panel.rect.xy = { screen_dim.x - 460, 50 } // Left of the Screen
-    view.panel.rect.zw = { len(view.panel.grid.cells), len(view.panel.grid.cells[0]) } * NATIVE_TILE_SIZE * view.scale 
+    view.panel.rect.zw = { len(view.panel.cells), len(view.panel.cells[0]) } * NATIVE_TILE_SIZE * view.scale 
 
     for !rl.WindowShouldClose() {
         handle_input(&view)
@@ -170,19 +143,9 @@ load_textures :: proc() {
 }
 
 handle_input :: proc(view: ^View) {
-    if rl.IsMouseButtonPressed(.LEFT) {
-        mouse_pos := rl.GetMousePosition()
-        if pos_in_rect(mouse_pos, view.scene_view.rect) { // Only check the scene grid if we clicked in the scene grid rect
-            // Clicked the Scene
-            for cells, x in view.scene_view.grid.cells {
-                for cell, y in cells {
-                    if pos_in_rect(mouse_pos, cell.rect) {
-                        log.debugf("Clicked cell at pos : %v", [2]int{x, y})
-                        break
-                    }
-                }
-            }
-        }
+    click_pos, scene_clicked := is_grid_clicked(&view.scene_view)
+    if scene_clicked {
+        log.debugf("Clicked cell at pos : %v", click_pos)
     }
 }
 
@@ -197,10 +160,10 @@ draw_frame :: proc (view : ^View) {
 draw_scene_view :: proc(view: ^View) {
     i_rect : [4]i32
     cell_pos : [2]i32
-    for cells, x in view.scene_view.grid.cells {
+    for cells, x in view.scene_view.cells {
         for cell, y in cells {
-            cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * view.scene_view.cell_size * i32(view.scale))
-            i_rect := arr_cast(view.scene_view.cell_size, i32) * i32(view.scale)
+            cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * arr_cast(view.scene_view.cell_dim, i32) * i32(view.scale))
+            i_rect := arr_cast(view.scene_view.cell_dim, i32) * i32(view.scale)
             rl.DrawRectangleLines(cell_pos.x, cell_pos.y, i_rect.x, i_rect.y, view.scene_view.cell_color)
             if .Ent in cell.data.options {
                 // Draw Ent
