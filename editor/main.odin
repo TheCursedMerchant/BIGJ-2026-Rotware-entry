@@ -8,6 +8,7 @@ import "core:mem"
 TARGET_RES :: [2]f32 { 2240, 1260 }
 NATIVE_TILE_SIZE :: 16
 SCENE_CELL_SIZE :: [2]int{ 24, 24 }
+PANEL_DIM :: [2]int{ 8, 16 }
 
 Texture :: rl.Texture2D
 Rectangle :: rl.Rectangle
@@ -20,28 +21,49 @@ View :: struct {
     tile_panel_items    : [dynamic]TilePanelItem,
     panel               : Panel,
     scene_view          : SceneView,
+    cursor              : Cursor,
     scale               : f32,
 }
 
-Panel :: struct {
-    grid : [3][8]int,
+ViewGrid :: struct($ROW, $COL: int, $DATA: typeid) {
+    cells       : [ROW][COL]ViewCell(DATA),
+    cell_dim    : [2]int,
+    cell_color  : Color,
+}
+
+ViewCell :: struct($T: typeid) {
+    using drawable : Drawable,
+    data : T,
+}
+
+Drawable :: struct {
     rect : Rect,
-    color : Color, 
+    color : Color,
+}
+
+Panel :: struct {
+    grid : ViewGrid(PANEL_DIM.x, PANEL_DIM.y, int),
+    using draw : Drawable,
 }
 
 SceneView :: struct {
-    grid : [SCENE_CELL_SIZE.x][SCENE_CELL_SIZE.y]SceneCell,
+    grid : ViewGrid(SCENE_CELL_SIZE.x, SCENE_CELL_SIZE.y, SceneCellData),
     cell_size : [2]i32,
     cell_color : Color,
     rect : Rect,
 }
 
 SceneCellOption :: enum { Ent, Tile }
-SceneCell :: struct {
-    rect        : Rect, 
+SceneCellData :: struct {
     tile_id     : TileTextureName,
     ent_id      : EntTextureName,
     options     : bit_set[SceneCellOption],
+}
+
+Cursor :: struct {
+    texture : Texture,
+    id      : int,
+    options : bit_set[SceneCellOption],
 }
 
 TileTextureName :: enum {
@@ -97,11 +119,12 @@ main :: proc() {
     load_textures()
 
     // View
-    screen_center := [2]f32{ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())} / 2.0
+    screen_dim := [2]f32{ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}
+    screen_center := screen_dim / 2.0
     view := View {
         ent_panel_items = make([dynamic]EntPanelItem, 0),
         tile_panel_items = make([dynamic]TilePanelItem, 0),
-        panel = { rect = { screen_center.x, screen_center.y, 320, 320 }, color = rl.WHITE },
+        panel = { grid = { cell_color = rl.WHITE }, color = rl.WHITE  },
         scene_view = { cell_size = { NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }, cell_color = rl.WHITE },
         scale = 3.0
     }
@@ -113,21 +136,22 @@ main :: proc() {
         append(&view.tile_panel_items, TilePanelItem{ t_name = t, id = int(t) })
     }
 
-    //view.panel.rect.xy -= (view.panel.rect.zw / 2)
-    //center_rect(&view.panel.rect)
-    view.scene_view.rect.zw = { len(view.scene_view.grid), len(view.scene_view.grid[0]) } * NATIVE_TILE_SIZE * view.scale
+    // Init Scene View
+    view.scene_view.rect.zw = { len(view.scene_view.grid.cells), len(view.scene_view.grid.cells[0]) } * NATIVE_TILE_SIZE * view.scale
     view.scene_view.rect.xy = screen_center
     center_rect(&view.scene_view.rect)
-
-    // Init Scene View
     n_cell_pos : [2]i32
-    for &cells, x in view.scene_view.grid {
+    for &cells, x in view.scene_view.grid.cells {
         for &cell, y in cells {
             n_cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * view.scene_view.cell_size * i32(view.scale))
             cell.rect.xy = arr_cast(n_cell_pos, f32)
             cell.rect.zw = arr_cast(view.scene_view.cell_size * i32(view.scale), f32)
         }
     }
+
+    // Init Panel
+    view.panel.rect.xy = { screen_dim.x - 460, 50 } // Left of the Screen
+    view.panel.rect.zw = { len(view.panel.grid.cells), len(view.panel.grid.cells[0]) } * NATIVE_TILE_SIZE * view.scale 
 
     for !rl.WindowShouldClose() {
         handle_input(&view)
@@ -150,9 +174,7 @@ handle_input :: proc(view: ^View) {
         mouse_pos := rl.GetMousePosition()
         if pos_in_rect(mouse_pos, view.scene_view.rect) { // Only check the scene grid if we clicked in the scene grid rect
             // Clicked the Scene
-            log.debugf("Mouse pos was : %v", mouse_pos)
-            log.debug("Clicked Scene view!")
-            for cells, x in view.scene_view.grid {
+            for cells, x in view.scene_view.grid.cells {
                 for cell, y in cells {
                     if pos_in_rect(mouse_pos, cell.rect) {
                         log.debugf("Clicked cell at pos : %v", [2]int{x, y})
@@ -167,25 +189,34 @@ handle_input :: proc(view: ^View) {
 draw_frame :: proc (view : ^View) {
     rl.BeginDrawing()
         rl.ClearBackground(rl.BLACK)
-        i_rect : [4]i32
-        cell_pos : [2]i32
-        for cells, x in view.scene_view.grid {
-            for cell, y in cells {
-                cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * view.scene_view.cell_size * i32(view.scale))
-                i_rect := arr_cast(view.scene_view.cell_size, i32) * i32(view.scale)
-                rl.DrawRectangleLines(cell_pos.x, cell_pos.y, i_rect.x, i_rect.y, view.scene_view.cell_color)
-                if .Ent in cell.options {
-                    // Draw Ent
-                    rl.DrawTextureEx(ent_textures[EntTextureName(cell.ent_id)], arr_cast(cell_pos, f32), 0, 1.0, view.scene_view.cell_color)
-                }
-                if .Tile in cell.options {
-                    // Draw Tile
-                    rl.DrawTextureEx(tile_textures[TileTextureName(cell.tile_id)], arr_cast(cell_pos, f32), 0, 1.0, view.scene_view.cell_color)
-                }
+        draw_scene_view(view)
+        draw_action_panel(view)
+    rl.EndDrawing()
+}
+
+draw_scene_view :: proc(view: ^View) {
+    i_rect : [4]i32
+    cell_pos : [2]i32
+    for cells, x in view.scene_view.grid.cells {
+        for cell, y in cells {
+            cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * view.scene_view.cell_size * i32(view.scale))
+            i_rect := arr_cast(view.scene_view.cell_size, i32) * i32(view.scale)
+            rl.DrawRectangleLines(cell_pos.x, cell_pos.y, i_rect.x, i_rect.y, view.scene_view.cell_color)
+            if .Ent in cell.data.options {
+                // Draw Ent
+                rl.DrawTextureEx(ent_textures[EntTextureName(cell.data.ent_id)], arr_cast(cell_pos, f32), 0, 1.0, view.scene_view.cell_color)
+            }
+            if .Tile in cell.data.options {
+                // Draw Tile
+                rl.DrawTextureEx(tile_textures[TileTextureName(cell.data.tile_id)], arr_cast(cell_pos, f32), 0, 1.0, view.scene_view.cell_color)
             }
         }
-        //rl.DrawRectangleRec(rect_to_rectangle(view.panel.rect), view.panel.color)
-    rl.EndDrawing()
+    }
+}
+
+draw_action_panel :: proc(view: ^View) {
+    // Background
+    rl.DrawRectangleRec(rect_to_rectangle(view.panel.rect), view.panel.color)
 }
 
 make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[]byte, size: uint) {
