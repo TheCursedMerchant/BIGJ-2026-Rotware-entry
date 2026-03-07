@@ -64,10 +64,13 @@ SceneItem :: struct {
     options     : bit_set[SceneItemOption],
 }
 
+CursorOptions :: enum { Dragging }
 Cursor :: struct {
-    texture : Texture,
-    id      : int,
-    options : bit_set[SceneItemOption],
+    texture     : Texture,
+    id          : int,
+    item_type   : SceneItemOption,
+    using draw  : Drawable,
+    options     : bit_set[CursorOptions],
 }
 
 TileTextureName :: enum {
@@ -160,9 +163,8 @@ init_scene_view :: proc(view: ^SceneView, pos : [2]f32, scale: f32) {
 
 init_action_panel :: proc(panel: ^Panel, pos : [2]f32, scale: f32) {
     init_panel_grid(&panel.grids[.Tile], .Tile, pos, scale)
-    //init_panel_grid(&panel.grids[.Ent], .Ent, pos, scale)
+    init_panel_grid(&panel.grids[.Ent], .Ent, pos, scale)
     panel.current_grid = .Tile
-    log.debugf("Cell 0,0 in Current grid is : %v", panel.grids[panel.current_grid].cells[0][0])
 }
 
 init_panel_grid :: proc(grid: ^PanelGrid, type: SceneItemOption, pos : [2]f32, scale: f32) {
@@ -200,15 +202,54 @@ load_textures :: proc() {
 }
 
 handle_input :: proc(view: ^View) {
-    click_pos, scene_clicked := is_grid_clicked(&view.scene_view)
-    if scene_clicked {
-        log.debugf("Clicked Sceneview cell at pos : %v", click_pos)
-    }
-
-    panel_clicked : bool
-    click_pos, panel_clicked = is_grid_clicked(get_panel_current_grid(&view.panel))
-    if panel_clicked {
-        log.debugf("Clicked Panel cell at pos : %v", click_pos)
+    mouse_pos := rl.GetMousePosition()
+    if rl.IsMouseButtonPressed(.LEFT) {
+        current_grid := get_panel_current_grid(&view.panel)
+        click_pos, panel_clicked := is_pos_in_cell(current_grid, mouse_pos)
+        if panel_clicked {
+            cell := current_grid.cells[click_pos.x][click_pos.y]
+            if cell.has_item {
+                rl.HideCursor()
+                view.cursor.id = cell.t_id
+                view.cursor.item_type = view.panel.current_grid
+                view.cursor.rect.zw = cell.rect.zw
+                view.cursor.options += { .Dragging }
+                switch view.panel.current_grid {
+                case .Ent: 
+                    view.cursor.texture = ent_textures[EntTextureName(cell.t_id)]
+                case .Tile: 
+                    view.cursor.texture = tile_textures[TileTextureName(cell.t_id)]
+                }
+            } 
+        } else {
+            scene_item : ^SceneItem
+            scene_clicked : bool
+            click_pos, scene_clicked = is_pos_in_cell(&view.scene_view, mouse_pos)
+            if scene_clicked && ( .Dragging in view.cursor.options ) {
+                scene_item = &view.scene_view.cells[click_pos.x][click_pos.y]
+                switch view.cursor.item_type {
+                case .Ent:
+                    scene_item.ent_id = EntTextureName(view.cursor.id)
+                    scene_item.options += { .Ent }
+                case .Tile:
+                    scene_item.tile_id = TileTextureName(view.cursor.id)
+                    scene_item.options += { .Tile }
+                }
+                rl.ShowCursor()
+                view.cursor = {}
+            }
+        }
+    } else if rl.IsMouseButtonPressed(.RIGHT) {
+        scene_item : ^SceneItem
+        click_pos, scene_clicked := is_pos_in_cell(&view.scene_view, mouse_pos)
+        if scene_clicked {
+            scene_item = &view.scene_view.cells[click_pos.x][click_pos.y]
+            if .Ent in scene_item.options {
+                scene_item.options -= { .Ent }
+            } else if .Tile in scene_item.options {
+                scene_item.options -= { .Tile }
+            }
+        }
     }
 }
 
@@ -217,6 +258,7 @@ draw_frame :: proc (view : ^View) {
         rl.ClearBackground(rl.BLACK)
         draw_scene_view(&view.scene_view)
         draw_action_panel(&view.panel)
+        draw_cursor(&view.cursor)
     rl.EndDrawing()
 }
 
@@ -230,7 +272,7 @@ draw_scene_view :: proc(view: ^SceneView) {
                 rl.DrawTexture(ent_textures[cell.ent_id], i32(cell.rect.x), i32(cell.rect.y), cell.color)
             }
             if .Tile in cell.options {
-                rl.DrawTexture(tile_textures[TileTextureName(cell.tile_id)], i32(cell.rect.x), i32(cell.rect.y), cell.color)
+                rl.DrawTexturePro(tile_textures[cell.tile_id], {0, 0, 16, 16}, rect_to_rectangle(cell.rect), {}, 0, rl.WHITE)
             }
         }
     }
@@ -261,6 +303,16 @@ draw_action_panel :: proc(panel: ^Panel) {
 draw_rectangle_lines :: proc(drawable: Drawable) {
     i_rect := arr_cast(drawable.rect, i32)
     rl.DrawRectangleLines(i_rect.x, i_rect.y, i_rect.z, i_rect.w, drawable.color)
+}
+
+draw_cursor :: proc(cursor: ^Cursor) {
+    cursor.rect.xy = rl.GetMousePosition() - (cursor.rect.zw / 2)
+    switch cursor.item_type {
+    case .Ent:
+        rl.DrawTexture(cursor.texture, i32(cursor.rect.x), i32(cursor.rect.y), cursor.color)
+    case .Tile:
+        rl.DrawTexturePro(cursor.texture, {0, 0, 16, 16}, rect_to_rectangle(cursor.rect), {}, 0, rl.WHITE) 
+    }
 }
 
 make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[]byte, size: uint) {

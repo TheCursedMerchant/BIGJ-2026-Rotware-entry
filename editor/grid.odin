@@ -27,18 +27,31 @@ init_view_grid :: proc(grid : ^ViewGrid($R, $COL, $T), default: T, scale : f32 =
     }
 }
 
-is_grid_clicked :: proc(grid: ^ViewGrid($R, $COL, $T)) -> (pos : [2]int, clicked : bool) {
-    if rl.IsMouseButtonPressed(.LEFT) {
-        mouse_pos := rl.GetMousePosition()
-        if pos_in_rect(mouse_pos, grid.rect) { // Only check the scene grid if we clicked in the scene grid rect
-            for cells, x in grid.cells {
-                for cell, y in cells {
-                    if pos_in_rect(mouse_pos, cell.rect) {
-                        return [2]int{ x, y }, true
-                    }
+is_pos_in_cell :: proc(grid: ^ViewGrid($R, $COL, $T), pos: [2]f32) -> ([2]int, bool) {
+    if pos_in_rect(pos, grid.rect) {
+        for cells, x in grid.cells {
+            for cell, y in cells {
+                if pos_in_rect(pos, cell.rect) {
+                    return [2]int{ x, y }, true
                 }
             }
         }
     }
     return {}, false
 }
+
+//is_grid_clicked :: proc(grid: ^ViewGrid($R, $COL, $T)) -> (pos : [2]int, clicked : bool) {
+//    if rl.IsMouseButtonPressed(.LEFT) {
+//        mouse_pos := rl.GetMousePosition()
+//        if pos_in_rect(mouse_pos, grid.rect) { // Only check the scene grid if we clicked in the scene grid rect
+//            for cells, x in grid.cells {
+//                for cell, y in cells {
+//                    if pos_in_rect(mouse_pos, cell.rect) {
+//                        return [2]int{ x, y }, true
+//                    }
+//                }
+//            }
+//        }
+//    }
+//    return {}, false
+//}
