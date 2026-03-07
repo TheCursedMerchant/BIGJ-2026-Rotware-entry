@@ -1,0 +1,3 @@
+-[x] Swap states of smallest box with outer box.
+-[] Ability to kick the boxes.
+-[]

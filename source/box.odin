@@ -3,6 +3,7 @@ package game
 // Imports
 import rl "vendor:raylib"
 import "core:slice"
+import "core:log"
 
 // Constants
 
@@ -18,7 +19,8 @@ import "core:slice"
 
 Box_State :: enum u8 {
     None,
-
+    Man,
+    Woman,
 }
 
 // Structs
@@ -40,7 +42,7 @@ Key_Value :: struct($T: typeid, $E: typeid) {
 
 // Procs
 
-rectangle_create :: proc(x, y, l: f32) -> (rect: Rectangle) {
+square_create :: proc(x, y, l: f32) -> (rect: Rectangle) {
     assert(x >= 0); assert(y >= 0); assert(l >= 0)
     return Rectangle{x, y, l, l}
 }
@@ -71,6 +73,7 @@ box_resize :: proc(box: ^Box, amount: f32) {
 }
 
 box_draw :: proc(box: Box) {
+    assert(rectangle_validity_check(box.rectangle)); assert(box.line_thickness >= 0);
     ray_rect := rl.Rectangle{box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w}
     rl.DrawRectangleLinesEx(ray_rect, box.line_thickness, box.color)
 }
@@ -114,6 +117,7 @@ box_smallest_containing_position :: proc(rect: Rectangle, arr: []Box) -> (index:
 }
 
 boxes_all_containing_position :: proc(rect: Rectangle, arr: []Box) -> (boxes: []Box) {
+    assert(len(arr) > 0); assert(rectangle_validity_check(rect))
     filter : [dynamic]Box; defer{delete(filter)}
     for i in 0..<len(arr) {
         if box_contains_position(rect, arr[i]) {
@@ -131,7 +135,21 @@ box_state_determine :: proc(arr: []Box) -> (state: Box_State) {
             append(&states, i.state)
         }
     }
+    if len(states) == 1 {
+        return states[0]
+    }
     
 
+
     return
+}
+
+box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
+    assert(position.x >= 0); assert(position.y >= 0); assert(len(arr) > 0)
+    smallest_index := box_smallest_containing_position(position, arr) or_return; assert(smallest_index >= 0); assert(smallest_index < len(arr))
+    outer_box_index := box_smallest_containing_position(arr[smallest_index].rectangle, arr) or_return; assert(outer_box_index >= 0); assert(outer_box_index < len(arr))
+    small_box := &arr[smallest_index]
+    outer_box := &arr[outer_box_index]
+    small_box.state, outer_box.state = outer_box.state, small_box.state
+    return true
 }
