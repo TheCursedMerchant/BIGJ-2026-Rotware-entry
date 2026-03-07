@@ -6,3 +6,5 @@ index.wasm
 /build/web/index.js
 /build
 notes.md
+build/web/
+build/desktop/

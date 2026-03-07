@@ -3,15 +3,14 @@ import la "core:math/linalg"
 
 // Check for Collisions
 MAX_ITERS :: 4
-DRAG : f32 : 25.0
+DRAG : f32 : 60.0
 
 CollisionBodyKind :: enum { Static, Slide }
 
 KinematicBody :: struct {
     collision_body  : CollisionBody,
-    vel             : [2]f32,
-    acc             : f32,
     remainder       : [2]f32,
+    vel             : [2]f32,
 }
 
 CollisionBody :: struct {
@@ -21,7 +20,7 @@ CollisionBody :: struct {
 
 move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
     kb.remainder.x += kb.vel.x
-    move := la.round(kb.remainder.x)
+    move := la.floor(kb.remainder.x)
 
     if (move != 0) {
         kb.remainder.x -= f32(move)
@@ -52,7 +51,7 @@ move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
 
 move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
     kb.remainder.y += kb.vel.y
-    move := la.round(kb.remainder.y)
+    move := la.floor(kb.remainder.y)
 
     if (move != 0) {
         kb.remainder.y -= f32(move)
@@ -81,7 +80,6 @@ move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
 }
 
 move_kinematic_body :: proc(kb: ^KinematicBody, solids : []CollisionBody, dt : f32) {
-    kb.vel = la.lerp(kb.vel, [2]f32{}, DRAG * dt)
     move_x(kb, solids)
     move_y(kb, solids)
 }
@@ -105,3 +103,20 @@ approach :: proc(current, target, increase : f32) -> f32 {
     return max(current - increase, target)
 }
 
+get_pos :: proc {
+    get_pos_player,
+    get_pos_kinematic_body,
+    get_pos_collision_body,
+}
+
+get_pos_player :: proc(player: Player) -> [2]f32 {
+    return get_pos_kinematic_body(player.kinematic_body)
+}
+
+get_pos_kinematic_body :: proc(kb: KinematicBody) -> [2]f32 {
+    return get_pos_collision_body(kb.collision_body)
+}
+
+get_pos_collision_body :: proc(c_body: CollisionBody) -> [2]f32 {
+    return c_body.box.rectangle.xy
+}
