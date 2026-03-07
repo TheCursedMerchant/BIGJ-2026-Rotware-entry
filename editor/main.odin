@@ -5,7 +5,7 @@ import "core:log"
 import "core:mem"
 //import "file"
 
-TARGET_RES :: [2]f32 { 1920, 1080 }
+TARGET_RES :: [2]f32 { 2240, 1260 }
 NATIVE_TILE_SIZE :: 16
 SCENE_CELL_SIZE :: [2]int{ 24, 24 }
 
@@ -38,6 +38,7 @@ SceneView :: struct {
 
 SceneCellOption :: enum { Ent, Tile }
 SceneCell :: struct {
+    rect        : Rect, 
     tile_id     : TileTextureName,
     ent_id      : EntTextureName,
     options     : bit_set[SceneCellOption],
@@ -82,6 +83,7 @@ tile_textures : [TileTextureName]Texture
 ent_textures : [EntTextureName]Texture
 
 main :: proc() {
+    // Init
     program_allocator : mem.Allocator 
     program_arena : mem.Arena 
     program_mem_block : []byte
@@ -92,25 +94,17 @@ main :: proc() {
 	rl.SetConfigFlags({})
 	rl.InitWindow(i32(TARGET_RES.x), i32(TARGET_RES.y), "Kick Boxing Editor")
     rl.SetTargetFPS(120)
+    load_textures()
 
+    // View
     screen_center := [2]f32{ f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())} / 2.0
-
     view := View {
         ent_panel_items = make([dynamic]EntPanelItem, 0),
         tile_panel_items = make([dynamic]TilePanelItem, 0),
         panel = { rect = { screen_center.x, screen_center.y, 320, 320 }, color = rl.WHITE },
         scene_view = { cell_size = { NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }, cell_color = rl.WHITE },
-        scale = 2.0
+        scale = 3.0
     }
-
-    //view.panel.rect.xy -= (view.panel.rect.zw / 2)
-    //center_rect(&view.panel.rect)
-
-    view.scene_view.rect.zw = { len(view.scene_view.grid), len(view.scene_view.grid[0]) } * NATIVE_TILE_SIZE
-    view.scene_view.rect.xy = screen_center
-    center_rect(&view.scene_view.rect, view.scale)
-
-    load_textures()
 
     for t in EntTextureName {
         append(&view.ent_panel_items, EntPanelItem{ t_name = t, id = int(t) })
@@ -119,7 +113,24 @@ main :: proc() {
         append(&view.tile_panel_items, TilePanelItem{ t_name = t, id = int(t) })
     }
 
+    //view.panel.rect.xy -= (view.panel.rect.zw / 2)
+    //center_rect(&view.panel.rect)
+    view.scene_view.rect.zw = { len(view.scene_view.grid), len(view.scene_view.grid[0]) } * NATIVE_TILE_SIZE * view.scale
+    view.scene_view.rect.xy = screen_center
+    center_rect(&view.scene_view.rect)
+
+    // Init Scene View
+    n_cell_pos : [2]i32
+    for &cells, x in view.scene_view.grid {
+        for &cell, y in cells {
+            n_cell_pos = arr_cast(view.scene_view.rect.xy, i32) + ({ i32(x), i32(y) } * view.scene_view.cell_size * i32(view.scale))
+            cell.rect.xy = arr_cast(n_cell_pos, f32)
+            cell.rect.zw = arr_cast(view.scene_view.cell_size * i32(view.scale), f32)
+        }
+    }
+
     for !rl.WindowShouldClose() {
+        handle_input(&view)
         draw_frame(&view)
     }
 
@@ -132,6 +143,25 @@ main :: proc() {
 load_textures :: proc() {
     ent_textures[.Player]           = rl.LoadTexture("./editor/textures/player.png")
     tile_textures[.Tile_Patch_0]    = rl.LoadTexture("./editor/textures/tile_patch_0.png")
+}
+
+handle_input :: proc(view: ^View) {
+    if rl.IsMouseButtonPressed(.LEFT) {
+        mouse_pos := rl.GetMousePosition()
+        if pos_in_rect(mouse_pos, view.scene_view.rect) { // Only check the scene grid if we clicked in the scene grid rect
+            // Clicked the Scene
+            log.debugf("Mouse pos was : %v", mouse_pos)
+            log.debug("Clicked Scene view!")
+            for cells, x in view.scene_view.grid {
+                for cell, y in cells {
+                    if pos_in_rect(mouse_pos, cell.rect) {
+                        log.debugf("Clicked cell at pos : %v", [2]int{x, y})
+                        break
+                    }
+                }
+            }
+        }
+    }
 }
 
 draw_frame :: proc (view : ^View) {
@@ -177,13 +207,13 @@ rect_to_rectangle :: proc(rect: Rect) -> Rectangle {
     return { rect.x, rect.y, rect.z, rect.w }
 }
 
-get_rect_center :: proc(rect: Rect, scale : f32 = 1.0) -> [2]f32 {
-    return rect.xy - ((rect.zw * scale) / 2)
+get_rect_center :: proc(rect: Rect) -> [2]f32 {
+    return rect.xy - (rect.zw / 2)
 }
 
 //NOTE: Relative to it's current position
-center_rect :: proc(rect: ^Rect, scale : f32 = 1.0) {
-    rect.xy = get_rect_center(rect^, scale)
+center_rect :: proc(rect: ^Rect) {
+    rect.xy = get_rect_center(rect^)
 }
 
 arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
