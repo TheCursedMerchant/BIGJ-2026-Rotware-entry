@@ -11,16 +11,18 @@ ViewGrid :: struct($ROW, $COL: int, $DATA: typeid) {
 
 ViewCell :: struct($T: typeid) {
     using drawable : Drawable,
-    data : T,
+    using data : T,
 }
 
-init_view_grid :: proc(grid : ^ViewGrid($R, $COL, $T), scale : f32 = 1.0) {
+init_view_grid :: proc(grid : ^ViewGrid($R, $COL, $T), default: T, scale : f32 = 1.0) {
     n_cell_pos : [2]f32
     for &cells, x in grid.cells {
         for &cell, y in cells {
             n_cell_pos = grid.rect.xy + ({ f32(x), f32(y) } * grid.cell_dim * scale)
             cell.rect.xy = arr_cast(n_cell_pos, f32)
             cell.rect.zw = grid.cell_dim * scale
+            cell.color = grid.cell_color
+            cell.data = default
         }
     }
 }
