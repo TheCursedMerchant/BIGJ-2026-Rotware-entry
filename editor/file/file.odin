@@ -70,7 +70,7 @@ serialize_game_object_cbor :: proc(obj : $T, name : string, dir: string) -> bool
     werr := os.write_entire_file_from_bytes(write_path, cbor_data)
  
     if werr != nil {
-        log.errorf("Unable to write file : %v", err)
+        log.errorf("Unable to write file : %v", werr)
         return false
     }
 

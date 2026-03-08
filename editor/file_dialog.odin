@@ -73,7 +73,7 @@ draw_file_dialog :: proc(fd: ^FileDialog) {
     }
 }
 
-is_pos_in_file_button :: proc(fd: ^FileDialog, pos: [2]f32) -> (string, bool) {
+is_pos_in_file_button :: proc(fd: ^FileDialog, pos: [2]f32) -> (os.File_Info, bool) {
     n_btn : TextButton
     if pos_in_rect(pos, fd.rect) {
         for info, idx in sa.slice(&fd.fis) {
@@ -81,9 +81,11 @@ is_pos_in_file_button :: proc(fd: ^FileDialog, pos: [2]f32) -> (string, bool) {
             n_btn.rect.xy = fd.rect.xy + fd.inner_padding
             n_btn.rect.y += f32(idx) * (n_btn.rect.w + fd.item_v_padding)
             if pos_in_rect(pos, n_btn.rect) {
-                return info.name, true
+                return info, true
             }
         }
     }
-    return "", false
+    return {}, false
 }
+
+on_file_button_click :: proc(fd: ^FileDialog, info : os.File_Info) {}

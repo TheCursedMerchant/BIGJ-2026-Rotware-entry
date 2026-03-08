@@ -19,6 +19,7 @@ import rl "vendor:raylib"
 import "core:log"
 import "core:mem"
 import sa "core:container/small_array"
+import "file"
 
 TARGET_RES :: [2]f32 { 2240, 1260 }
 NATIVE_TILE_SIZE :: 16
@@ -47,7 +48,7 @@ Drawable :: struct {
     color : Color,
 }
 
-PanelButtonId :: enum { Ent, Tile }
+PanelButtonId :: enum { Ent, Tile, Save }
 PanelGrid :: ViewGrid(PANEL_DIM.x, PANEL_DIM.y, PanelItem)
 Panel :: struct {
     grids           : [SceneItemOption]PanelGrid,
@@ -121,6 +122,17 @@ EntPanelItem :: struct {
 TilePanelItem :: struct {
     t_name  : TileTextureName,
     id      : int, 
+}
+
+SceneSave :: struct {
+    cells : [SCENE_CELL_SIZE.x][SCENE_CELL_SIZE.y]SceneCellSave,
+}
+
+SceneCellSave :: struct {
+    tile_id     : TileTextureName,
+    ent_id      : EntTextureName,
+    has_tile    : b8,
+    has_ent     : b8,
 }
 
 tile_textures : [TileTextureName]Texture
@@ -199,6 +211,8 @@ init_action_panel :: proc(panel: ^Panel, pos : [2]f32, scale: f32) {
     panel.buttons[.Tile] = text_button(tile_pos, "Tiles", { 16, 16 })
     ent_pos := tile_pos + { panel.buttons[.Tile].rect.z + 8, 0 }
     panel.buttons[.Ent] = text_button(ent_pos, "Ents", { 16, 16 })
+    save_pos := ent_pos + { 0, panel.buttons[.Ent].rect.w + 8 }
+    panel.buttons[.Save] = text_button(save_pos, "Save", {16, 16})
 }
 
 text_button :: proc(pos: [2]f32, text: string, padding : [2]f32 = {}) -> TextButton {
@@ -254,9 +268,10 @@ handle_input :: proc(view: ^View) {
     mouse_pos := rl.GetMousePosition()
     if view.file_dialog.show {
         if rl.IsMouseButtonPressed(.LEFT) {
-            f_name, clicked := is_pos_in_file_button(&view.file_dialog, mouse_pos) 
+            info, clicked := is_pos_in_file_button(&view.file_dialog, mouse_pos) 
             if clicked {
-                log.debugf("Clicked file : %v", f_name)
+                load_scene_from_path(view, info.fullpath)
+                view.file_dialog.show = false
             }
         }
     } else {
@@ -267,6 +282,8 @@ handle_input :: proc(view: ^View) {
                 view.panel.current_grid = .Tile
             } else if pos_in_rect(mouse_pos, view.panel.buttons[.Ent].rect) {
                 view.panel.current_grid = .Ent
+            } else if pos_in_rect(mouse_pos, view.panel.buttons[.Save].rect) {
+                save_scene(view)
             }
         } else if rl.IsMouseButtonPressed(.RIGHT) {
             handle_scene_right_click(view, mouse_pos)
@@ -414,6 +431,39 @@ draw_text_button :: proc(button : TextButton) {
     rl.DrawText(rl.TextFormat("%s", button.text.content), i32(text_draw.rect.x), i32(text_draw.rect.y), i32(text_draw.rect.w), text_draw.color)
 }
 
+save_scene :: proc(view: ^View) {
+    scn := &view.scene_view
+    save_cells : [SCENE_CELL_SIZE.x][SCENE_CELL_SIZE.y]SceneCellSave
+    for cells, x in scn.cells {
+        for cell, y in cells {
+            save_cells[x][y].ent_id = cell.ent_id
+            save_cells[x][y].has_ent = .Ent in cell.options
+            save_cells[x][y].tile_id = cell.tile_id
+            save_cells[x][y].has_tile = .Tile in cell.options
+        }
+    }
+    file.serialize_game_object_cbor(SceneSave { cells = save_cells }, "test_scn", "editor/scenes/")
+}
+
+load_scene_from_path :: proc(view: ^View, path: string) {
+    save_scene := file.deserialize_game_object_cbor(SceneSave, path)
+    n_item : ^SceneItem
+    for cells, x in save_scene.cells {
+        for cell, y in cells {
+            n_item = &view.scene_view.cells[x][y]
+            if cell.has_ent {
+                n_item.ent_id = cell.ent_id
+                n_item.options += { .Ent }
+            } 
+            if cell.has_tile {
+                n_item.tile_id = cell.tile_id
+                n_item.options += { .Tile }
+            }
+        }
+    }
+}
+
+// Utils
 make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[]byte, size: uint) {
     arena_err : mem.Allocator_Error
     block^, arena_err = make([]byte, size)
