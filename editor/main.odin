@@ -19,6 +19,8 @@ import rl "vendor:raylib"
 import "core:log"
 import "core:mem"
 import sa "core:container/small_array"
+import s "core:strings"
+
 import "file"
 
 TARGET_RES :: [2]f32 { 2240, 1260 }
@@ -28,6 +30,7 @@ SCENE_CELL_SIZE :: [2]int{ 24, 24 }
 PANEL_DIM :: [2]int{ 8, 16 }
 BUTTON_TEXT_SIZE :: 24.0
 SCENE_PATH :: "./editor/scenes"
+SCENE_FILE_ENDING :: "_scn"
 
 Texture :: rl.Texture2D
 Rectangle :: rl.Rectangle
@@ -35,20 +38,22 @@ Color :: rl.Color
 
 Rect :: [4]f32
 
+InputMode :: enum {
+    Normal,
+    Text,
+}
+
 View :: struct {
-    panel               : Panel,
-    scene_view          : SceneView,
-    file_dialog         : FileDialog,
-    cursor              : Cursor,
-    scale               : f32,
+    panel                       : Panel,
+    scene_view                  : SceneView,
+    file_dialog                 : FileDialog,
+    cursor                      : Cursor,
+    builder                     : s.Builder,
+    scale                       : f32,
+    input_mode                  : InputMode,
 }
 
-Drawable :: struct {
-    rect : Rect,
-    color : Color,
-}
-
-PanelButtonId :: enum { Ent, Tile, Save }
+PanelButtonId :: enum { Ent, Tile, Save, Scene_Name }
 PanelGrid :: ViewGrid(PANEL_DIM.x, PANEL_DIM.y, PanelItem)
 Panel :: struct {
     grids           : [SceneItemOption]PanelGrid,
@@ -58,7 +63,14 @@ Panel :: struct {
 
 TextButton :: struct {
     using draw      : Drawable,
-    text            : DrawableText
+    text            : DrawableText,
+    is_selected     : b8,
+}
+
+Drawable :: struct {
+    rect : Rect,
+    color : Color,
+    alt_color : Color,
 }
 
 DrawableText :: struct {
@@ -177,7 +189,7 @@ main :: proc() {
         },
         scale = 3.0,
     }
-
+    
     center_rect(&view.file_dialog.rect)
 
     init_action_panel(&view.panel, { screen_dim.x - 460, 50 }, view.scale)
@@ -211,8 +223,21 @@ init_action_panel :: proc(panel: ^Panel, pos : [2]f32, scale: f32) {
     panel.buttons[.Tile] = text_button(tile_pos, "Tiles", { 16, 16 })
     ent_pos := tile_pos + { panel.buttons[.Tile].rect.z + 8, 0 }
     panel.buttons[.Ent] = text_button(ent_pos, "Ents", { 16, 16 })
-    save_pos := ent_pos + { 0, panel.buttons[.Ent].rect.w + 8 }
+    save_pos := ent_pos + { panel.buttons[.Ent].rect.z + 8, 0 }
     panel.buttons[.Save] = text_button(save_pos, "Save", {16, 16})
+
+    scn_name_pos := tile_pos + { 0, panel.buttons[.Tile].rect.w + 8 }
+    scn_name_width := panel.buttons[.Tile].rect.z * 3
+    panel.buttons[.Scene_Name] = { 
+        rect = { scn_name_pos.x, scn_name_pos.y, scn_name_width, BUTTON_TEXT_SIZE + 16 },
+        color = rl.WHITE,
+        alt_color = rl.RED,
+        text = {
+            rect = { scn_name_pos.x + 16, scn_name_pos.y + 8, scn_name_width, BUTTON_TEXT_SIZE },
+            color = rl.WHITE,
+            content = "test"
+        }
+    }
 }
 
 text_button :: proc(pos: [2]f32, text: string, padding : [2]f32 = {}) -> TextButton {
@@ -266,16 +291,23 @@ load_textures :: proc() {
 
 handle_input :: proc(view: ^View) {
     mouse_pos := rl.GetMousePosition()
-    if view.file_dialog.show {
-        if rl.IsMouseButtonPressed(.LEFT) {
+    switch view.input_mode {
+    case .Normal: normal_mode(view, mouse_pos)
+    case .Text: text_mode(view, mouse_pos)
+    }
+}
+
+normal_mode :: proc(view: ^View, mouse_pos : [2]f32) {
+    if rl.IsMouseButtonPressed(.LEFT) {
+        if view.file_dialog.show {
             info, clicked := is_pos_in_file_button(&view.file_dialog, mouse_pos) 
             if clicked {
                 load_scene_from_path(view, info.fullpath)
+                sa.clear(&view.file_dialog.fis)
                 view.file_dialog.show = false
             }
-        }
-    } else {
-        if rl.IsMouseButtonPressed(.LEFT) {
+        } else {
+            handle_scene_input_click(view, mouse_pos)
             handle_scene_left_click(view, mouse_pos)
             handle_panel_left_click(view, mouse_pos)
             if pos_in_rect(mouse_pos, view.panel.buttons[.Tile].rect) {
@@ -285,9 +317,9 @@ handle_input :: proc(view: ^View) {
             } else if pos_in_rect(mouse_pos, view.panel.buttons[.Save].rect) {
                 save_scene(view)
             }
-        } else if rl.IsMouseButtonPressed(.RIGHT) {
-            handle_scene_right_click(view, mouse_pos)
         }
+    } else if rl.IsMouseButtonPressed(.RIGHT) {
+        handle_scene_right_click(view, mouse_pos)
     }
 
     // Open File Dialog
@@ -299,6 +331,28 @@ handle_input :: proc(view: ^View) {
             sa.clear(&view.file_dialog.fis)
         }
     }
+}
+
+text_mode :: proc(view: ^View, mouse_pos: [2]f32) {
+	key := rl.GetCharPressed()
+
+    write_str := &view.panel.buttons[.Scene_Name].text.content
+	if (int(key) >= 32) && (int(key) <= 126) {
+		sb := &view.builder
+		s.builder_reset(sb)
+		s.write_string(sb, write_str^)
+		s.write_rune(sb, key)
+		write_str^ = s.to_string(sb^)
+	}
+
+	if rl.IsKeyPressed(.BACKSPACE) || rl.IsKeyPressed(.DELETE) {
+		write_str^, _ = s.substring_to(write_str^, len(write_str^) - 1)
+	}
+
+	if rl.IsKeyPressed(.ENTER) {
+        view.input_mode = .Normal
+        view.panel.buttons[.Scene_Name].is_selected = false
+	}
 }
 
 handle_scene_left_click :: proc(view: ^View, mouse_pos : [2]f32) {
@@ -350,6 +404,13 @@ handle_panel_left_click :: proc(view: ^View, mouse_pos : [2]f32) {
                 view.cursor.texture = tile_textures[TileTextureName(cell.t_id)]
             }
         } 
+    }
+}
+
+handle_scene_input_click:: proc(view: ^View, mouse_pos : [2]f32) {
+    if pos_in_rect(mouse_pos, view.panel.buttons[.Scene_Name].rect) {
+        view.panel.buttons[.Scene_Name].is_selected = true
+        view.input_mode = .Text
     }
 }
 
@@ -426,7 +487,9 @@ draw_cursor :: proc(cursor: ^Cursor) {
 }
 
 draw_text_button :: proc(button : TextButton) {
-    draw_rectangle_lines(button.draw)
+    m_btn_draw := button.draw
+    if button.is_selected do m_btn_draw.color = button.alt_color
+    draw_rectangle_lines(m_btn_draw)
     text_draw := button.text.draw
     rl.DrawText(rl.TextFormat("%s", button.text.content), i32(text_draw.rect.x), i32(text_draw.rect.y), i32(text_draw.rect.w), text_draw.color)
 }
@@ -442,7 +505,9 @@ save_scene :: proc(view: ^View) {
             save_cells[x][y].has_tile = .Tile in cell.options
         }
     }
-    file.serialize_game_object_cbor(SceneSave { cells = save_cells }, "test_scn", "editor/scenes/")
+    save_name := s.concatenate({ view.panel.buttons[.Scene_Name].text.content, SCENE_FILE_ENDING })
+    defer delete(save_name)
+    file.serialize_game_object_cbor(SceneSave { cells = save_cells }, save_name, "editor/scenes/")
 }
 
 load_scene_from_path :: proc(view: ^View, path: string) {
@@ -451,6 +516,7 @@ load_scene_from_path :: proc(view: ^View, path: string) {
     for cells, x in save_scene.cells {
         for cell, y in cells {
             n_item = &view.scene_view.cells[x][y]
+            n_item^ = {}
             if cell.has_ent {
                 n_item.ent_id = cell.ent_id
                 n_item.options += { .Ent }
