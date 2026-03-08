@@ -1,7 +1,6 @@
 package game
 import la "core:math/linalg"
 import "core:math/rand"
-import rl "vendor:raylib"
 
 FALL_OFF_THRESHHOLD :: 0.1
 CAMERA_SPEED :: 16.0
