@@ -8,6 +8,7 @@ TARGET_FPS :: 30
 FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
 TARGET_RES :: [2]i32 { 768, 432 }
 NATIVE_RES :: [2]i32{ 768, 432 }
+SCENE_LEVEL_DIM :: [2]int{ 24, 24 }
 
 // Alias's
 Font :: rl.Font
@@ -41,6 +42,25 @@ Render :: struct {
     anim    : Animation,
     pos     : [2]f32,
     offset  : [2]f32,
+}
+
+SceneSave :: struct {
+    cells : [SCENE_LEVEL_DIM.x][SCENE_LEVEL_DIM.y]SceneCellSave,
+}
+
+SceneCellSave :: struct {
+    tile_id     : TileTextureName,
+    ent_id      : EntTextureName,
+    has_tile    : b8,
+    has_ent     : b8,
+}
+
+TileTextureName :: enum {
+    Tile_Patch_0,
+}
+
+EntTextureName :: enum {
+    Player,
 }
 
 run: bool
@@ -104,6 +124,9 @@ init :: proc() {
         log.info("Audio device is ready!")
         // TODO: Load Sounds Here
     }
+    
+    level_data := deserialize_game_object(SceneSave, "assets/scenes/test_scn.json")
+    log.debugf("Level data loaded : %v", level_data)
 }
 
 init_game_ctx :: proc() {

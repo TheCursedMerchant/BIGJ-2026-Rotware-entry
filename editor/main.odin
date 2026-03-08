@@ -29,7 +29,7 @@ NATIVE_TILE_DIM :: [2]f32{ NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }
 SCENE_CELL_SIZE :: [2]int{ 24, 24 }
 PANEL_DIM :: [2]int{ 8, 16 }
 BUTTON_TEXT_SIZE :: 24.0
-SCENE_PATH :: "./editor/scenes"
+SCENE_PATH :: "assets/scenes/"
 SCENE_FILE_ENDING :: "_scn"
 
 Texture :: rl.Texture2D
@@ -523,11 +523,11 @@ save_scene :: proc(view: ^View) {
     }
     save_name := s.concatenate({ view.panel.buttons[.Scene_Name].text.content, SCENE_FILE_ENDING })
     defer delete(save_name)
-    file.serialize_game_object_cbor(SceneSave { cells = save_cells }, save_name, "editor/scenes/")
+    file.serialize_game_object(SceneSave { cells = save_cells }, save_name, SCENE_PATH)
 }
 
 load_scene_from_path :: proc(view: ^View, path: string) {
-    save_scene := file.deserialize_game_object_cbor(SceneSave, path)
+    save_scene := file.deserialize_game_object(SceneSave, path)
     n_item : ^SceneItem
     for cells, x in save_scene.cells {
         for cell, y in cells {

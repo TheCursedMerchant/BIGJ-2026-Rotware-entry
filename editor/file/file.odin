@@ -22,7 +22,7 @@ serialize_game_object :: proc(obj : $T, name : string, dir: string) -> bool {
     write_path := s.concatenate({ dir, name, FILE_ENDING })
     defer delete(write_path)
     log.infof("Writing to path : %v", write_path)
-    werr := os.write_entire_file_from_string(write_path, json_data)
+    werr := os.write_entire_file_from_bytes(write_path, json_data)
  
     if werr != nil {
         log.errorf("Unable to write file : %v", err)
