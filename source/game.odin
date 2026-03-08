@@ -26,6 +26,7 @@ Context :: struct {
     player                  : Player,
     camera                  : FollowCamera,
     update_timer            : f32,
+    level                   : ^Level,
 }
 
 Player :: struct {
@@ -44,27 +45,9 @@ Render :: struct {
     offset  : [2]f32,
 }
 
-SceneSave :: struct {
-    cells : [SCENE_LEVEL_DIM.x][SCENE_LEVEL_DIM.y]SceneCellSave,
-}
-
-SceneCellSave :: struct {
-    tile_id     : TileTextureName,
-    ent_id      : EntTextureName,
-    has_tile    : b8,
-    has_ent     : b8,
-}
-
-TileTextureName :: enum {
-    Tile_Patch_0,
-}
-
-EntTextureName :: enum {
-    Player,
-}
-
 run: bool
 game_ctx : ^Context
+
 init :: proc() {
 	run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
@@ -72,43 +55,6 @@ init :: proc() {
     rl.SetTargetFPS(120)
 
     init_game_ctx()
-
-    // Adding test level geometry
-    append(&game_ctx.collision_bodies, CollisionBody{
-        box = {
-            rectangle = { 64, 0, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle ={ 64, 32, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 64, 64, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 64, 96, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 96, 96, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
@@ -124,9 +70,6 @@ init :: proc() {
         log.info("Audio device is ready!")
         // TODO: Load Sounds Here
     }
-    
-    level_data := deserialize_game_object(SceneSave, "assets/scenes/test_scn.json")
-    log.debugf("Level data loaded : %v", level_data)
 }
 
 init_game_ctx :: proc() {
@@ -135,9 +78,13 @@ init_game_ctx :: proc() {
     game_ctx.level_render = rl.LoadRenderTexture(NATIVE_RES.x, NATIVE_RES.y)
     rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
     game_ctx.update_timer = FIXED_TIME_STEP
+    game_ctx.level = new(Level)
+    new_level : SceneSave
+    load_level_data(&new_level, .Test)
+    game_ctx.level^ = build_level_from_save(&new_level)
     game_ctx.camera.camera = Camera {
 		offset = (arr_cast(screen_res, f32) / 2),
-		target = {0, 0},
+		target = game_ctx.level.player_start_pos,
 		zoom   = 2.0,
 	}
 }
@@ -158,7 +105,7 @@ init_player :: proc() {
         kinematic_body = {
             collision_body = {
                 box = {
-                    rectangle = {32, 32, 12, 12},
+                    rectangle = {game_ctx.level.player_start_pos.x, game_ctx.level.player_start_pos.y, 12, 12},
                     line_thickness = 1,
                     color = rl.BLACK,
                     state = .None },
