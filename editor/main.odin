@@ -331,6 +331,22 @@ normal_mode :: proc(view: ^View, mouse_pos : [2]f32) {
             sa.clear(&view.file_dialog.fis)
         }
     }
+
+    // Fill Function
+    if rl.IsKeyPressed(.G) && .Dragging in view.cursor.options {
+        for &cells in view.scene_view.cells {
+            for &cell in cells {
+                switch view.cursor.item_type {
+                case .Ent: 
+                    cell.ent_id = EntTextureName(view.cursor.id)
+                    cell.options += { .Ent }
+                case .Tile:
+                    cell.tile_id = TileTextureName(view.cursor.id)
+                    cell.options += { .Tile }
+                }
+            }
+        }
+    }
 }
 
 text_mode :: proc(view: ^View, mouse_pos: [2]f32) {
