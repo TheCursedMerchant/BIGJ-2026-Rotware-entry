@@ -25,6 +25,7 @@ NATIVE_TILE_SIZE :: 16
 NATIVE_TILE_DIM :: [2]f32{ NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }
 SCENE_CELL_SIZE :: [2]int{ 24, 24 }
 PANEL_DIM :: [2]int{ 8, 16 }
+BUTTON_TEXT_SIZE :: 24.0
 
 Texture :: rl.Texture2D
 Rectangle :: rl.Rectangle
@@ -44,10 +45,22 @@ Drawable :: struct {
     color : Color,
 }
 
+PanelButtonId :: enum { Ent, Tile }
 PanelGrid :: ViewGrid(PANEL_DIM.x, PANEL_DIM.y, PanelItem)
 Panel :: struct {
-    grids : [SceneItemOption]PanelGrid,
-    current_grid : SceneItemOption,
+    grids           : [SceneItemOption]PanelGrid,
+    current_grid    : SceneItemOption,
+    buttons         : [PanelButtonId]TextButton,
+}
+
+TextButton :: struct {
+    using draw      : Drawable,
+    text            : DrawableText
+}
+
+DrawableText :: struct {
+    using draw  : Drawable,
+    content     : string, 
 }
 
 PanelItem :: struct {
@@ -165,6 +178,27 @@ init_action_panel :: proc(panel: ^Panel, pos : [2]f32, scale: f32) {
     init_panel_grid(&panel.grids[.Tile], .Tile, pos, scale)
     init_panel_grid(&panel.grids[.Ent], .Ent, pos, scale)
     panel.current_grid = .Tile
+
+    panel_rect := panel.grids[.Tile].rect
+    tile_pos := panel_rect.xy + { 0, panel_rect.w } + { 0, 16 }
+    panel.buttons[.Tile] = text_button(tile_pos, "Tiles", { 16, 16 })
+    ent_pos := tile_pos + { panel.buttons[.Tile].rect.z + 8, 0 }
+    panel.buttons[.Ent] = text_button(ent_pos, "Ents", { 16, 16 })
+}
+
+text_button :: proc(pos: [2]f32, text: string, padding : [2]f32 = {}) -> TextButton {
+    button : TextButton
+    button.text.content = text
+    text_width := f32(rl.MeasureText(rl.TextFormat("%s", text), BUTTON_TEXT_SIZE)) 
+    button.rect = Rect {0, 0, text_width + padding.x, BUTTON_TEXT_SIZE + padding.y }
+    button.rect.xy = pos
+    button.text.color = rl.WHITE
+    button.text.rect.xy = button.rect.xy
+    button.text.rect.z = text_width
+    button.text.rect.w = BUTTON_TEXT_SIZE
+    button.color = rl.WHITE
+    center_rect_in_rect(&button.text.rect, button.rect)
+    return button
 }
 
 init_panel_grid :: proc(grid: ^PanelGrid, type: SceneItemOption, pos : [2]f32, scale: f32) {
@@ -204,52 +238,67 @@ load_textures :: proc() {
 handle_input :: proc(view: ^View) {
     mouse_pos := rl.GetMousePosition()
     if rl.IsMouseButtonPressed(.LEFT) {
-        current_grid := get_panel_current_grid(&view.panel)
-        click_pos, panel_clicked := is_pos_in_cell(current_grid, mouse_pos)
-        if panel_clicked {
-            cell := current_grid.cells[click_pos.x][click_pos.y]
-            if cell.has_item {
-                rl.HideCursor()
-                view.cursor.id = cell.t_id
-                view.cursor.item_type = view.panel.current_grid
-                view.cursor.rect.zw = cell.rect.zw
-                view.cursor.options += { .Dragging }
-                switch view.panel.current_grid {
-                case .Ent: 
-                    view.cursor.texture = ent_textures[EntTextureName(cell.t_id)]
-                case .Tile: 
-                    view.cursor.texture = tile_textures[TileTextureName(cell.t_id)]
-                }
-            } 
-        } else {
-            scene_item : ^SceneItem
-            scene_clicked : bool
-            click_pos, scene_clicked = is_pos_in_cell(&view.scene_view, mouse_pos)
-            if scene_clicked && ( .Dragging in view.cursor.options ) {
-                scene_item = &view.scene_view.cells[click_pos.x][click_pos.y]
-                switch view.cursor.item_type {
-                case .Ent:
-                    scene_item.ent_id = EntTextureName(view.cursor.id)
-                    scene_item.options += { .Ent }
-                case .Tile:
-                    scene_item.tile_id = TileTextureName(view.cursor.id)
-                    scene_item.options += { .Tile }
-                }
-                rl.ShowCursor()
-                view.cursor = {}
-            }
+        handle_scene_left_click(view, mouse_pos)
+        handle_panel_left_click(view, mouse_pos)
+        if pos_in_rect(mouse_pos, view.panel.buttons[.Tile].rect) {
+            view.panel.current_grid = .Tile
+        } else if pos_in_rect(mouse_pos, view.panel.buttons[.Ent].rect) {
+            view.panel.current_grid = .Ent
         }
     } else if rl.IsMouseButtonPressed(.RIGHT) {
-        scene_item : ^SceneItem
-        click_pos, scene_clicked := is_pos_in_cell(&view.scene_view, mouse_pos)
-        if scene_clicked {
-            scene_item = &view.scene_view.cells[click_pos.x][click_pos.y]
-            if .Ent in scene_item.options {
-                scene_item.options -= { .Ent }
-            } else if .Tile in scene_item.options {
-                scene_item.options -= { .Tile }
-            }
+        handle_scene_right_click(view, mouse_pos)
+    }
+}
+
+handle_scene_left_click :: proc(view: ^View, mouse_pos : [2]f32) {
+    scene_item : ^SceneItem
+    click_pos, scene_clicked := is_pos_in_cell(&view.scene_view, mouse_pos)
+    if scene_clicked && ( .Dragging in view.cursor.options ) {
+        scene_item = &view.scene_view.cells[click_pos.x][click_pos.y]
+        switch view.cursor.item_type {
+        case .Ent:
+            scene_item.ent_id = EntTextureName(view.cursor.id)
+            scene_item.options += { .Ent }
+        case .Tile:
+            scene_item.tile_id = TileTextureName(view.cursor.id)
+            scene_item.options += { .Tile }
         }
+        rl.ShowCursor()
+        view.cursor = {}
+    }
+}
+
+handle_scene_right_click :: proc(view: ^View, mouse_pos: [2]f32) {
+    scene_item : ^SceneItem
+    click_pos, scene_clicked := is_pos_in_cell(&view.scene_view, mouse_pos)
+    if scene_clicked {
+        scene_item = &view.scene_view.cells[click_pos.x][click_pos.y]
+        if .Ent in scene_item.options {
+            scene_item.options -= { .Ent }
+        } else if .Tile in scene_item.options {
+            scene_item.options -= { .Tile }
+        }
+    }
+}
+
+handle_panel_left_click :: proc(view: ^View, mouse_pos : [2]f32) {
+    current_grid := get_panel_current_grid(&view.panel)
+    click_pos, panel_clicked := is_pos_in_cell(current_grid, mouse_pos)
+    if panel_clicked {
+        cell := current_grid.cells[click_pos.x][click_pos.y]
+        if cell.has_item {
+            rl.HideCursor()
+            view.cursor.id = cell.t_id
+            view.cursor.item_type = view.panel.current_grid
+            view.cursor.rect.zw = cell.rect.zw
+            view.cursor.options += { .Dragging }
+            switch view.panel.current_grid {
+            case .Ent: 
+                view.cursor.texture = ent_textures[EntTextureName(cell.t_id)]
+            case .Tile: 
+                view.cursor.texture = tile_textures[TileTextureName(cell.t_id)]
+            }
+        } 
     }
 }
 
@@ -265,14 +314,16 @@ draw_frame :: proc (view : ^View) {
 draw_scene_view :: proc(view: ^SceneView) {
     i_rect : [4]i32
     cell_pos : [2]i32
+    ent_texture : Texture
     for cells, x in view.cells {
         for cell, y in cells {
             draw_rectangle_lines(cell)
-            if .Ent in cell.options {
-                rl.DrawTexture(ent_textures[cell.ent_id], i32(cell.rect.x), i32(cell.rect.y), cell.color)
-            }
             if .Tile in cell.options {
                 rl.DrawTexturePro(tile_textures[cell.tile_id], {0, 0, 16, 16}, rect_to_rectangle(cell.rect), {}, 0, rl.WHITE)
+            }
+            if .Ent in cell.options {
+                ent_texture = ent_textures[cell.ent_id]
+                rl.DrawTexturePro(ent_texture, {0, 0, f32(ent_texture.width), f32(ent_texture.height)}, rect_to_rectangle(cell.rect), {}, 0, rl.WHITE) 
             }
         }
     }
@@ -290,13 +341,17 @@ draw_action_panel :: proc(panel: ^Panel) {
                 switch panel.current_grid {
                 case .Ent: 
                     item_texture = ent_textures[EntTextureName(cell.t_id)] 
-                    rl.DrawTexture(item_texture, i32(cell.rect.x), i32(cell.rect.y), cell.color)
+                    rl.DrawTexturePro(item_texture, {0, 0, f32(item_texture.width), f32(item_texture.height)}, rect_to_rectangle(cell.rect), {}, 0, rl.WHITE) 
                 case .Tile: 
                     item_texture = tile_textures[TileTextureName(cell.t_id)]
                     rl.DrawTexturePro(item_texture, {0, 0, 16, 16}, rect_to_rectangle(cell.rect), {}, 0, rl.WHITE) 
                 }
             }
         }
+    }
+
+    for button in panel.buttons {
+        draw_text_button(button)
     }
 }
 
@@ -309,10 +364,16 @@ draw_cursor :: proc(cursor: ^Cursor) {
     cursor.rect.xy = rl.GetMousePosition() - (cursor.rect.zw / 2)
     switch cursor.item_type {
     case .Ent:
-        rl.DrawTexture(cursor.texture, i32(cursor.rect.x), i32(cursor.rect.y), cursor.color)
+        rl.DrawTexturePro(cursor.texture, {0, 0, f32(cursor.texture.width), f32(cursor.texture.height)}, rect_to_rectangle(cursor.rect), {}, 0, rl.WHITE) 
     case .Tile:
         rl.DrawTexturePro(cursor.texture, {0, 0, 16, 16}, rect_to_rectangle(cursor.rect), {}, 0, rl.WHITE) 
     }
+}
+
+draw_text_button :: proc(button : TextButton) {
+    draw_rectangle_lines(button.draw)
+    text_draw := button.text.draw
+    rl.DrawText(rl.TextFormat("%s", button.text.content), i32(text_draw.rect.x), i32(text_draw.rect.y), i32(text_draw.rect.w), text_draw.color)
 }
 
 make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[]byte, size: uint) {
@@ -335,12 +396,20 @@ rect_to_rectangle :: proc(rect: Rect) -> Rectangle {
 }
 
 get_rect_center :: proc(rect: Rect) -> [2]f32 {
+    return rect.xy + (rect.zw / 2)
+}
+
+center_rect_in_rect :: proc(a : ^Rect, b : Rect) {
+    a.xy += get_rect_center(b) - get_rect_center(a^)
+}
+
+get_rect_center_offset :: proc(rect: Rect) -> [2]f32 {
     return rect.xy - (rect.zw / 2)
 }
 
 //NOTE: Relative to it's current position
 center_rect :: proc(rect: ^Rect) {
-    rect.xy = get_rect_center(rect^)
+    rect.xy = get_rect_center_offset(rect^)
 }
 
 arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
