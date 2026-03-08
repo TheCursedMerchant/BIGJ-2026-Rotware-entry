@@ -18,7 +18,7 @@ change which entities and tiles get loaded by the consumer (The Game)
 import rl "vendor:raylib"
 import "core:log"
 import "core:mem"
-//import "file"
+import sa "core:container/small_array"
 
 TARGET_RES :: [2]f32 { 2240, 1260 }
 NATIVE_TILE_SIZE :: 16
@@ -26,6 +26,7 @@ NATIVE_TILE_DIM :: [2]f32{ NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }
 SCENE_CELL_SIZE :: [2]int{ 24, 24 }
 PANEL_DIM :: [2]int{ 8, 16 }
 BUTTON_TEXT_SIZE :: 24.0
+SCENE_PATH :: "./editor/scenes"
 
 Texture :: rl.Texture2D
 Rectangle :: rl.Rectangle
@@ -36,6 +37,7 @@ Rect :: [4]f32
 View :: struct {
     panel               : Panel,
     scene_view          : SceneView,
+    file_dialog         : FileDialog,
     cursor              : Cursor,
     scale               : f32,
 }
@@ -150,8 +152,21 @@ main :: proc() {
     view := View {
         panel = { grids = { .Ent = panel_grid, .Tile = panel_grid }, current_grid = .Tile },
         scene_view = { cell_dim = NATIVE_TILE_DIM, cell_color = rl.WHITE },
-        scale = 3.0
+        file_dialog = {
+            rect = { screen_center.x, screen_center.y, 800, 800 },
+            color = rl.WHITE,
+            text_button_template = { 
+                rect = { 0, 0, 768, BUTTON_TEXT_SIZE },
+                color = rl.WHITE,
+                text = { rect = {0, 0, 768, BUTTON_TEXT_SIZE }, color = rl.WHITE },
+            },
+            inner_padding = { 16, 16 },
+            item_v_padding = 16,
+        },
+        scale = 3.0,
     }
+
+    center_rect(&view.file_dialog.rect)
 
     init_action_panel(&view.panel, { screen_dim.x - 460, 50 }, view.scale)
     init_scene_view(&view.scene_view, screen_center, view.scale)
@@ -237,16 +252,35 @@ load_textures :: proc() {
 
 handle_input :: proc(view: ^View) {
     mouse_pos := rl.GetMousePosition()
-    if rl.IsMouseButtonPressed(.LEFT) {
-        handle_scene_left_click(view, mouse_pos)
-        handle_panel_left_click(view, mouse_pos)
-        if pos_in_rect(mouse_pos, view.panel.buttons[.Tile].rect) {
-            view.panel.current_grid = .Tile
-        } else if pos_in_rect(mouse_pos, view.panel.buttons[.Ent].rect) {
-            view.panel.current_grid = .Ent
+    if view.file_dialog.show {
+        if rl.IsMouseButtonPressed(.LEFT) {
+            f_name, clicked := is_pos_in_file_button(&view.file_dialog, mouse_pos) 
+            if clicked {
+                log.debugf("Clicked file : %v", f_name)
+            }
         }
-    } else if rl.IsMouseButtonPressed(.RIGHT) {
-        handle_scene_right_click(view, mouse_pos)
+    } else {
+        if rl.IsMouseButtonPressed(.LEFT) {
+            handle_scene_left_click(view, mouse_pos)
+            handle_panel_left_click(view, mouse_pos)
+            if pos_in_rect(mouse_pos, view.panel.buttons[.Tile].rect) {
+                view.panel.current_grid = .Tile
+            } else if pos_in_rect(mouse_pos, view.panel.buttons[.Ent].rect) {
+                view.panel.current_grid = .Ent
+            }
+        } else if rl.IsMouseButtonPressed(.RIGHT) {
+            handle_scene_right_click(view, mouse_pos)
+        }
+    }
+
+    // Open File Dialog
+    if rl.IsKeyPressed(.F) {
+        view.file_dialog.show = !view.file_dialog.show
+        if view.file_dialog.show {
+            load_fis_from_path(&view.file_dialog, SCENE_PATH)
+        } else {
+            sa.clear(&view.file_dialog.fis)
+        }
     }
 }
 
@@ -307,9 +341,13 @@ draw_frame :: proc (view : ^View) {
         rl.ClearBackground(rl.BLACK)
         draw_scene_view(&view.scene_view)
         draw_action_panel(&view.panel)
+        if view.file_dialog.show {
+            draw_file_dialog(&view.file_dialog)
+        }
         draw_cursor(&view.cursor)
     rl.EndDrawing()
 }
+
 
 draw_scene_view :: proc(view: ^SceneView) {
     i_rect : [4]i32
