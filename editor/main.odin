@@ -26,7 +26,7 @@ import "file"
 TARGET_RES :: [2]f32 { 2240, 1260 }
 NATIVE_TILE_SIZE :: 16
 NATIVE_TILE_DIM :: [2]f32{ NATIVE_TILE_SIZE, NATIVE_TILE_SIZE }
-SCENE_CELL_SIZE :: [2]int{ 24, 24 }
+SCENE_CELL_SIZE :: [2]int{ 25, 25 }
 PANEL_DIM :: [2]int{ 8, 16 }
 BUTTON_TEXT_SIZE :: 24.0
 SCENE_PATH :: "assets/scenes/"
