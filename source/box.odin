@@ -3,12 +3,13 @@ package game
 // Imports
 import rl "vendor:raylib"
 import "core:slice"
-import "core:log"
 
 // Constants
 
+MINIMUM_SIZE : f32 : 1
+MAXIMUM_SIZE : f32 : 100
 
-
+HITBOX :: Rectangle{0,0,10,10}
 
 
 // Globals
@@ -25,7 +26,7 @@ Box_State :: enum u8 {
 
 // Structs
 
-Rectangle :: [4]f32 // x, y, h, w
+Rectangle :: [4]f32 // x, y, w, h
 
 Box :: struct {
     rectangle : Rectangle,
@@ -73,7 +74,7 @@ box_resize :: proc(box: ^Box, amount: f32) {
 }
 
 box_draw :: proc(box: Box) {
-    assert(rectangle_validity_check(box.rectangle)); assert(box.line_thickness >= 0);
+    assert(rectangle_validity_check(box.rectangle)); assert(box.line_thickness >= 0)
     ray_rect := rl.Rectangle{box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w}
     rl.DrawRectangleLinesEx(ray_rect, box.line_thickness, box.color)
 }
@@ -152,4 +153,23 @@ box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
     outer_box := &arr[outer_box_index]
     small_box.state, outer_box.state = outer_box.state, small_box.state
     return true
+}
+
+box_kick :: proc(arr: []CollisionBody, player: Player) {
+    boxes : []Box
+    for i in 0..<len(arr){
+        boxes[i] = arr[i].box
+    }
+    filter := boxes_all_containing_position(rect = {player.prev_pos.x, player.prev_pos.y, 0,0}, arr = boxes[:])
+    hitbox := HITBOX
+    hitbox.xy = player.prev_pos.xy + ([2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * player.prev_pos)
+    
+}
+
+rectangle_overlap :: proc(a, b: Rectangle) -> (overlap: bool) {
+    a_x1_smaller := a.x < b.x + b.z
+    a_x2_larger := a.x + a.z > b.x
+    a_y1_smaller := a.y < b.y + b.w
+    a_y2_larger := a.y + a.w > b.y
+    return a_x1_smaller && a_x2_larger && a_y1_smaller && a_y2_larger
 }

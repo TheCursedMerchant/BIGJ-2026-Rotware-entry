@@ -114,3 +114,12 @@ utest_box_state_swap :: proc(t: ^testing.T) {
     testing.expect_value(t, arr[0].state, game.Box_State.Woman)
     testing.expect_value(t, arr[1].state, game.Box_State.Man)
 }
+
+@(test)
+utest_rectangle_overlap :: proc(t: ^testing.T) {
+    rect1 := game.Rectangle{20, 20, 20, 20}
+    rect2 := game.Rectangle{15, 25, 10, 10}
+    
+    overlap := game.rectangle_overlap(rect1, rect2)
+    testing.expect_value(t, overlap, true)
+}
