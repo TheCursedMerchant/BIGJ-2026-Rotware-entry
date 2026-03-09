@@ -3,11 +3,14 @@ package game
 import rl "vendor:raylib"
 import "core:log"
 import "core:c"
+import la "core:math/linalg"
 
 TARGET_FPS :: 30
 FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
 TARGET_RES :: [2]i32 { 768, 432 }
 NATIVE_RES :: [2]i32{ 768, 432 }
+NATIVE_TILE_DIM :: [2]int{ 16, 16 }
+SCENE_LEVEL_DIM :: [2]int{ 25, 25 }
 
 // Alias's
 Font :: rl.Font
@@ -25,6 +28,8 @@ Context :: struct {
     player                  : Player,
     camera                  : FollowCamera,
     update_timer            : f32,
+    level                   : ^Level,
+    res_scale_factor        : f32,
 }
 
 Player :: struct {
@@ -45,6 +50,7 @@ Render :: struct {
 
 run: bool
 game_ctx : ^Context
+
 init :: proc() {
 	run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
@@ -52,43 +58,6 @@ init :: proc() {
     rl.SetTargetFPS(120)
 
     init_game_ctx()
-
-    // Adding test level geometry
-    append(&game_ctx.collision_bodies, CollisionBody{
-        box = {
-            rectangle = { 64, 0, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle ={ 64, 32, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 64, 64, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 64, 96, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
-    append(&game_ctx.collision_bodies, CollisionBody{ 
-        box = {
-            rectangle = { 96, 96, 16, 16 },
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None}, 
-        kind = .Static})
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
@@ -107,14 +76,21 @@ init :: proc() {
 }
 
 init_game_ctx :: proc() {
-    screen_res := TARGET_RES
+    screen_res := arr_cast(TARGET_RES, f32)
     game_ctx = new(Context)
     game_ctx.level_render = rl.LoadRenderTexture(NATIVE_RES.x, NATIVE_RES.y)
+    scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
+    game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
     rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
     game_ctx.update_timer = FIXED_TIME_STEP
+    game_ctx.level = new(Level)
+    new_level : SceneSave
+    load_level_data(&new_level, .Test)
+    game_ctx.level^ = build_level_from_save(&new_level)
+    center_tile_pos := [2]f32{ 13, 13 } * f32(NATIVE_TILE_DIM.x) * game_ctx.res_scale_factor
     game_ctx.camera.camera = Camera {
-		offset = (arr_cast(screen_res, f32) / 2),
-		target = {0, 0},
+		offset = center_tile_pos,
+		target = game_ctx.level.player_start_pos,
 		zoom   = 2.0,
 	}
 }
@@ -135,7 +111,7 @@ init_player :: proc() {
         kinematic_body = {
             collision_body = {
                 box = {
-                    rectangle = {32, 32, 12, 12},
+                    rectangle = {game_ctx.level.player_start_pos.x, game_ctx.level.player_start_pos.y, 12, 12},
                     line_thickness = 1,
                     color = rl.BLACK,
                     state = .None },
@@ -165,7 +141,7 @@ update :: proc() {
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
 
-    update_camera(game_ctx, dt)
+    //update_camera(game_ctx, dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
 }
@@ -206,6 +182,11 @@ physics_update :: proc (dt: f32) {
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
     rl.SetWindowSize(c.int(w), c.int(h))
+    screen_res := arr_cast(TARGET_RES, f32)
+    scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
+    game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
+    center_tile_pos := [2]f32{ 13, 13 } * f32(NATIVE_TILE_DIM.x) * game_ctx.res_scale_factor
+    game_ctx.camera.target = center_tile_pos
 }
 
 shutdown :: proc() {

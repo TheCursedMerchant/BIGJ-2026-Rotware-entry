@@ -3,9 +3,11 @@ package game
 import rl "vendor:raylib"
 import la "core:math/linalg"
 
+BG_COLOR :: rl.Color{ 20, 30, 38, 255 }
+
 draw_frame :: proc(dt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
-	    rl.ClearBackground({0, 120, 153, 255})
+	    rl.ClearBackground(BG_COLOR)
         paint_lvl_texture(dt)
     rl.EndTextureMode()
 
@@ -21,9 +23,19 @@ draw_frame :: proc(dt: f32) {
 paint_lvl_texture :: proc(dt: f32) {
     rl.BeginMode2D(game_ctx.camera)
         player := &game_ctx.player
+        // Draw Tiles
+        for tiles in game_ctx.level.tiles {
+            for tile in tiles {
+                draw_pixel_perfect_render(tile.render)
+            }
+        }
+        
+        // Draw Collision Bodies
         for body in game_ctx.collision_bodies {
             box_draw(body.box)
         }
+
+        // Draw Ents/Player
         player.render.pos = interpolate_pos(player.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
