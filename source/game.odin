@@ -11,7 +11,7 @@ TARGET_RES :: [2]i32 { 768, 432 }
 NATIVE_RES :: [2]i32{ 768, 432 }
 NATIVE_TILE_DIM :: [2]int{ 16, 16 }
 SCENE_LEVEL_DIM :: [2]int{ 25, 25 }
-CAMERA_ZOOM_SPEED :: 16.0
+CAMERA_ZOOM_SPEED :: 2.5
 
 // Alias's
 Font :: rl.Font
@@ -149,7 +149,7 @@ update :: proc() {
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
 
-    update_camera(dt)
+    update_camera(interpolated_dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
 }

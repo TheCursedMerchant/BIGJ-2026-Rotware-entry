@@ -31,8 +31,8 @@ update_camera :: proc (dt: f32) {
     camera.target = update_shake_pos(&camera.shake, camera.target)
     if camera.zooming {
         camera.zoom = la.lerp(camera.zoom, camera.target_zoom, 1.0 - la.exp(camera.zoom_speed * -dt))
-        if la.abs(camera.zoom - camera.target_zoom) < 0.01 {
-            camera.zoom = la.floor(camera.target_zoom)
+        if la.abs(camera.zoom - camera.target_zoom) < 0.1 {
+            camera.zoom = camera.target_zoom
             camera.zooming = false
         }
     }
