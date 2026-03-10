@@ -9,8 +9,8 @@ import "core:slice"
 MINIMUM_SIZE : f32 : 1
 MAXIMUM_SIZE : f32 : 100
 
-HITBOX :: Rectangle{0,0,10,10}
-
+KICK_HITBOX :: Rectangle{0,0,10,10}
+KICK_VELOCITY : [2]f32 : {10, 10}
 
 // Globals
 
@@ -155,15 +155,38 @@ box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
     return true
 }
 
-box_kick :: proc(arr: []CollisionBody, player: Player) {
+box_kick_find_all :: proc(arr: []CollisionBody, player: Player) -> (mobile, static: []CollisionBody) {
     boxes : []Box
+    temp_mobile, temp_static : [dynamic]CollisionBody; defer{delete(temp_mobile); delete(temp_static)}
+    temp_static = slice.clone_to_dynamic(arr)
     for i in 0..<len(arr){
         boxes[i] = arr[i].box
     }
     filter := boxes_all_containing_position(rect = {player.prev_pos.x, player.prev_pos.y, 0,0}, arr = boxes[:])
-    hitbox := HITBOX
+    hitbox := KICK_HITBOX
     hitbox.xy = player.prev_pos.xy + ([2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * player.prev_pos)
-    
+    for i := 0; i < len(temp_static); i += 1 {
+        if rectangle_overlap(hitbox, temp_static[i].box.rectangle) {
+            append(&temp_mobile, arr[i])
+            unordered_remove(&temp_static, i)
+            i -= 1
+        }
+    }
+    mobile = temp_mobile[:]
+    static = temp_static[:]
+    return
+}
+
+box_kick_assign_kb :: proc(targets: []CollisionBody, player: Player) -> (k_bodies: []KinematicBody) {
+    for i in 0..<len(targets) {
+        vel := [2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * KICK_VELOCITY
+        kb := KinematicBody{
+            collision_body = targets[i],
+            vel = vel
+        }
+        k_bodies[i] = kb
+    }
+    return
 }
 
 rectangle_overlap :: proc(a, b: Rectangle) -> (overlap: bool) {
