@@ -41,7 +41,7 @@ level_names := [LevelId]string {
 }
 
 tile_anim_map := [TileTextureName]Animation_Name {
-    .Tile_Patch_0 = .Blue_Tile_Base,
+    .Tile_Patch_0 = .Place_Holder_Tile_Idle,
 }
 
 TileAnimMap :: [TileTextureName]Animation_Name

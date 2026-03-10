@@ -286,7 +286,7 @@ calc_grid_pos_from_count :: proc(count : int, grid_width: int) -> [2]int {
 
 load_textures :: proc() {
     ent_textures[.Player]           = rl.LoadTexture("./editor/textures/player.png")
-    tile_textures[.Tile_Patch_0]    = rl.LoadTexture("./editor/textures/tile_patch_0.png")
+    tile_textures[.Tile_Patch_0]    = rl.LoadTexture("./editor/textures/place_holder_tile.png")
 }
 
 handle_input :: proc(view: ^View) {
