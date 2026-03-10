@@ -11,6 +11,7 @@ TARGET_RES :: [2]i32 { 768, 432 }
 NATIVE_RES :: [2]i32{ 768, 432 }
 NATIVE_TILE_DIM :: [2]int{ 16, 16 }
 SCENE_LEVEL_DIM :: [2]int{ 25, 25 }
+CAMERA_ZOOM_SPEED :: 16.0
 
 // Alias's
 Font :: rl.Font
@@ -92,10 +93,12 @@ init_game_ctx :: proc() {
     level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
     log.debugf("Texture center : %v", level_center)
     // Center camera onto the center tile pos
-    game_ctx.camera.camera = Camera {
+    game_ctx.camera = FollowCamera {
 		offset = (screen_res / 2.0),
 		target = level_center,
 		zoom   = 1.0,
+        zoom_speed = CAMERA_ZOOM_SPEED,
+        target_zoom = 1.0,
 	}
     log.debugf("Camera target : %v", game_ctx.camera.target)
 }
@@ -132,9 +135,9 @@ update :: proc() {
 
     // TODO: Remove testing only
     if rl.IsKeyPressed(.N) {
-        game_ctx.camera.zoom += 1.0
+        update_camera_zoom(1.0)
     } else if rl.IsKeyPressed(.M) {
-        game_ctx.camera.zoom -= 1.0
+        update_camera_zoom(-1.0)
     }
 
     handle_player_input(FIXED_TIME_STEP)
@@ -146,7 +149,7 @@ update :: proc() {
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
 
-    //update_camera(game_ctx, dt)
+    update_camera(dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
 }
