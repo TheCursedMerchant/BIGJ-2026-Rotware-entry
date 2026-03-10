@@ -11,6 +11,7 @@ TARGET_RES :: [2]i32 { 768, 432 }
 NATIVE_RES :: [2]i32{ 768, 432 }
 NATIVE_TILE_DIM :: [2]int{ 16, 16 }
 SCENE_LEVEL_DIM :: [2]int{ 25, 25 }
+CAMERA_ZOOM_SPEED :: 2.5
 
 // Alias's
 Font :: rl.Font
@@ -28,8 +29,8 @@ Context :: struct {
     player                  : Player,
     camera                  : FollowCamera,
     update_timer            : f32,
-    level                   : ^Level,
     res_scale_factor        : f32,
+    level                   : ^Level,
 }
 
 Player :: struct {
@@ -65,7 +66,6 @@ init :: proc() {
         rl.UnloadImage(atlas_image)
         game_ctx.font = load_atlased_font(game_ctx.atlas)
         init_player()
-        game_ctx.camera.target = get_render_center(game_ctx.player.render)
     }
 
 	rl.InitAudioDevice()
@@ -86,13 +86,21 @@ init_game_ctx :: proc() {
     game_ctx.level = new(Level)
     new_level : SceneSave
     load_level_data(&new_level, .Test)
-    game_ctx.level^ = build_level_from_save(&new_level)
-    center_tile_pos := [2]f32{ 13, 13 } * f32(NATIVE_TILE_DIM.x) * game_ctx.res_scale_factor
-    game_ctx.camera.camera = Camera {
-		offset = center_tile_pos,
-		target = game_ctx.level.player_start_pos,
-		zoom   = 2.0,
+    game_ctx.level^ = build_level_from_save(&new_level) 
+
+    log.debugf("Scale factor : %v", game_ctx.res_scale_factor)
+    center_cell := SCENE_LEVEL_DIM.x / 2
+    level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
+    log.debugf("Texture center : %v", level_center)
+    // Center camera onto the center tile pos
+    game_ctx.camera = FollowCamera {
+		offset = (screen_res / 2.0),
+		target = level_center,
+		zoom   = 1.0,
+        zoom_speed = CAMERA_ZOOM_SPEED,
+        target_zoom = 1.0,
 	}
+    log.debugf("Camera target : %v", game_ctx.camera.target)
 }
 
 init_player :: proc() {
@@ -127,9 +135,9 @@ update :: proc() {
 
     // TODO: Remove testing only
     if rl.IsKeyPressed(.N) {
-        game_ctx.camera.zoom += 1.0
+        update_camera_zoom(1.0)
     } else if rl.IsKeyPressed(.M) {
-        game_ctx.camera.zoom -= 1.0
+        update_camera_zoom(-1.0)
     }
 
     handle_player_input(FIXED_TIME_STEP)
@@ -141,7 +149,7 @@ update :: proc() {
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
 
-    //update_camera(game_ctx, dt)
+    update_camera(interpolated_dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
 }
@@ -181,12 +189,11 @@ physics_update :: proc (dt: f32) {
 // In a web build, this is called when browser changes size. Remove the
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
+    log.debugf("Set window size called..")
     rl.SetWindowSize(c.int(w), c.int(h))
     screen_res := arr_cast(TARGET_RES, f32)
     scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
     game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
-    center_tile_pos := [2]f32{ 13, 13 } * f32(NATIVE_TILE_DIM.x) * game_ctx.res_scale_factor
-    game_ctx.camera.target = center_tile_pos
 }
 
 shutdown :: proc() {
