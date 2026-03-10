@@ -1,7 +1,6 @@
 package game
 
 import s "core:strings"
-import log "core:log"
 
 SCENES_DIR :: "assets/scenes/"
 
@@ -51,7 +50,6 @@ load_level_data :: proc(lvl : ^SceneSave, id: LevelId) {
     level_path := s.concatenate({ SCENES_DIR, level_names[.Test]})
     defer delete(level_path)
     lvl^ = deserialize_game_object(SceneSave, level_path)
-    log.debugf("Level data loaded : %v", lvl)
 }
 
 build_level_from_save :: proc(lvl: ^SceneSave) -> Level {

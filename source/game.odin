@@ -28,8 +28,8 @@ Context :: struct {
     player                  : Player,
     camera                  : FollowCamera,
     update_timer            : f32,
-    level                   : ^Level,
     res_scale_factor        : f32,
+    level                   : ^Level,
 }
 
 Player :: struct {
@@ -65,7 +65,6 @@ init :: proc() {
         rl.UnloadImage(atlas_image)
         game_ctx.font = load_atlased_font(game_ctx.atlas)
         init_player()
-        game_ctx.camera.target = get_render_center(game_ctx.player.render)
     }
 
 	rl.InitAudioDevice()
@@ -86,13 +85,19 @@ init_game_ctx :: proc() {
     game_ctx.level = new(Level)
     new_level : SceneSave
     load_level_data(&new_level, .Test)
-    game_ctx.level^ = build_level_from_save(&new_level)
-    center_tile_pos := [2]f32{ 13, 13 } * f32(NATIVE_TILE_DIM.x) * game_ctx.res_scale_factor
+    game_ctx.level^ = build_level_from_save(&new_level) 
+
+    log.debugf("Scale factor : %v", game_ctx.res_scale_factor)
+    center_cell := SCENE_LEVEL_DIM.x / 2
+    level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
+    log.debugf("Texture center : %v", level_center)
+    // Center camera onto the center tile pos
     game_ctx.camera.camera = Camera {
-		offset = center_tile_pos,
-		target = game_ctx.level.player_start_pos,
-		zoom   = 2.0,
+		offset = (screen_res / 2.0),
+		target = level_center,
+		zoom   = 1.0,
 	}
+    log.debugf("Camera target : %v", game_ctx.camera.target)
 }
 
 init_player :: proc() {
@@ -181,12 +186,11 @@ physics_update :: proc (dt: f32) {
 // In a web build, this is called when browser changes size. Remove the
 // `rl.SetWindowSize` call if you don't want a resizable game.
 parent_window_size_changed :: proc(w, h: int) {
+    log.debugf("Set window size called..")
     rl.SetWindowSize(c.int(w), c.int(h))
     screen_res := arr_cast(TARGET_RES, f32)
     scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
     game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
-    center_tile_pos := [2]f32{ 13, 13 } * f32(NATIVE_TILE_DIM.x) * game_ctx.res_scale_factor
-    game_ctx.camera.target = center_tile_pos
 }
 
 shutdown :: proc() {

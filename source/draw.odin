@@ -24,9 +24,13 @@ paint_lvl_texture :: proc(dt: f32) {
     rl.BeginMode2D(game_ctx.camera)
         player := &game_ctx.player
         // Draw Tiles
-        for tiles in game_ctx.level.tiles {
-            for tile in tiles {
-                draw_pixel_perfect_render(tile.render)
+        for tiles, x in game_ctx.level.tiles {
+            for tile, y in tiles {
+                if x == 12 && y == 12 {
+                    draw_pixel_perfect_render(tile.render, rl.RED)
+                } else {
+                    draw_pixel_perfect_render(tile.render)
+                }
             }
         }
         
@@ -40,20 +44,24 @@ paint_lvl_texture :: proc(dt: f32) {
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
         //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
+        level_center := (arr_cast(NATIVE_TILE_DIM, f32) * 12.0 * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
+        rl.DrawRectangle(i32(level_center.x), i32(level_center.y), 1, 1, rl.YELLOW)
+
     rl.EndMode2D()
 }
 
-draw_pixel_perfect_render :: proc(render: Render) {
+draw_pixel_perfect_render :: proc(render: Render, tint: rl.Color = rl.WHITE) {
     draw_pos := la.round(render.pos + render.offset) 
     draw_atlas_anim_at_pos(
         render.anim,
         draw_pos,
         {},
         game_ctx.atlas,
+        tint,
     )
 }
 
-draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atlas: Texture) {
+draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atlas: Texture, tint: rl.Color) {
 	anim_texture := anim_atlas_texture(anim)
 	atlas_rect := anim_texture.rect
 	atlas_offset := [2]f32{anim_texture.offset_left, anim_texture.offset_top}
@@ -63,7 +71,7 @@ draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atl
 		anim_texture.rect.width,
 		anim_texture.rect.height,
 	}
-	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, rl.WHITE)
+	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, tint)
 }
 
 interpolate_pos :: proc(prev, current: [2]f32, dt : f32) -> [2]f32 {
