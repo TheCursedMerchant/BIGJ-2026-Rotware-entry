@@ -129,19 +129,14 @@ boxes_all_containing_position :: proc(rect: Rectangle, arr: []Box) -> (boxes: []
     return
 }
 
-box_state_determine :: proc(arr: []Box) -> (state: Box_State) {
+box_state_find :: proc(arr: []Box) -> (key_state: []Box_State) {
     states : [dynamic]Box_State; defer{delete(states)}
     for i in arr {
         if !slice.contains(states[:], i.state) {
             append(&states, i.state)
         }
     }
-    if len(states) == 1 {
-        return states[0]
-    }
-    
-
-
+    key_state = states[:]
     return
 }
 
