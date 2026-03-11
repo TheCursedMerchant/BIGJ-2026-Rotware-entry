@@ -121,27 +121,29 @@ box_smallest_containing_position :: proc(rect: Rectangle, arr: []Box) -> (index:
     return smallest.key, true
 }
 
-boxes_all_containing_position :: proc(rect: Rectangle, arr: []Box, allocator := context.allocator) -> (boxes: []Box) {
+boxes_all_containing_position :: proc(
+    rect: Rectangle, 
+    arr: []Box, 
+    allocator := context.allocator
+) -> (boxes: sa.Small_Array(BOX_SMALL_ARRAY_SIZE, Box)) {
     assert(len(arr) > 0); assert(rectangle_validity_check(rect))
-    filter : sa.Small_Array(BOX_SMALL_ARRAY_SIZE, Box)
     for i in 0..<len(arr) {
         if box_contains_position(rect, arr[i]) {
-            sa.push(&filter, arr[i])
+            sa.append(&boxes, arr[i])
         }
     }
-    boxes = slice.clone(sa.slice(&filter), allocator)
-    return
+    return boxes
 }
 
-box_state_find :: proc(arr: []Box, allocator := context.allocator) -> (key_state: []Box_State) {
-    states : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State)
+box_state_find :: proc(
+    arr: []Box
+) -> (key_state: sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State)) {
     for i in arr {
-        if !slice.contains(sa.slice(&states), i.state) {
-            sa.push(&states, i.state)
+        if !slice.contains(sa.slice(&key_state), i.state) {
+            sa.append(&key_state, i.state)
         }
     }
-    key_state = slice.clone(sa.slice(&states), allocator)
-    return
+    return key_state
 }
 
 box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
@@ -154,12 +156,14 @@ box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
     return true
 }
 
-box_kick_determine :: proc(arr: []CollisionBody, player: Player, allocator := context.allocator) -> (mobile, static: []CollisionBody) {
+box_kick_determine :: proc(
+    arr: []CollisionBody, 
+    player: Player, 
+) -> (mobile, static: sa.Small_Array(BOX_SMALL_ARRAY_SIZE, CollisionBody)) {
     assert(len(arr) > 0)
     boxes : []Box
-    temp_mobile, temp_static : sa.Small_Array(BOX_SMALL_ARRAY_SIZE, CollisionBody)
     for cb in arr {
-        sa.push(&temp_static, cb)
+        sa.push(&static, cb)
     }
     for i in 0..<len(arr){
         boxes[i] = arr[i].box
@@ -167,15 +171,13 @@ box_kick_determine :: proc(arr: []CollisionBody, player: Player, allocator := co
     filter := boxes_all_containing_position(rect = {player.prev_pos.x, player.prev_pos.y, 0,0}, arr = boxes[:])
     hitbox := KICK_HITBOX
     hitbox.xy = player.prev_pos.xy + ([2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * player.prev_pos)
-    for i := 0; i < sa.len(temp_static); i += 1 {
-        if rectangle_overlap(hitbox, sa.get(temp_static, i).box.rectangle) && !box_array_contains(filter[:], sa.get(temp_static, i).box) {
-            sa.push(&temp_mobile, sa.get(temp_static, i))
-            sa.unordered_remove(&temp_static, i)
+    for i := 0; i < sa.len(static); i += 1 {
+        if rectangle_overlap(hitbox, sa.get(static, i).box.rectangle) && !box_array_contains(sa.slice(&filter), sa.get(static, i).box) {
+            sa.push(&mobile, sa.get(static, i))
+            sa.unordered_remove(&static, i)
             i -= 1
         }
     }
-    mobile = slice.clone(sa.slice(&temp_mobile), allocator)
-    static = slice.clone(sa.slice(&temp_static), allocator)
     return
 
     box_array_contains :: proc(arr: []Box, x: Box) -> (found: bool) {

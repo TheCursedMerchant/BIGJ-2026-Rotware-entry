@@ -3,8 +3,6 @@ package tests
 import game "../../source"
 import "core:testing"
 import rl "vendor:raylib"
-import "core:log"
-
 
 @(test)
 utest_box_resize :: proc(t: ^testing.T) {
@@ -86,10 +84,10 @@ utest_boxes_all_containing_position :: proc(t: ^testing.T) {
     arr := [5]game.Box{box1, box2, box3, box4, box5}
 
     test_arr1 := game.boxes_all_containing_position(position1, arr[:])
-    testing.expect_value(t, len(test_arr1), 5)
+    testing.expect_value(t, test_arr1.len, 5)
 
     test_arr2 := game.boxes_all_containing_position(position2, arr[:])
-    testing.expect_value(t, len(test_arr2), 3)
+    testing.expect_value(t, test_arr2.len, 3)
 }
 
 @(test)
