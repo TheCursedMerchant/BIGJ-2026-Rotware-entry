@@ -53,12 +53,13 @@ run: bool
 game_ctx : ^Context
 
 init :: proc() {
-	run = true
+    run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.InitWindow(TARGET_RES.x, TARGET_RES.y, "Kick Boxing")
     rl.SetTargetFPS(120)
 
     init_game_ctx()
+    update_tile_frames()
 
     if atlas_data, atlas_ok := read_entire_file("assets/atlas.png"); atlas_ok {
         atlas_image := rl.LoadImageFromMemory(".png", raw_data(atlas_data), c.int(len(atlas_data)))
@@ -86,7 +87,7 @@ init_game_ctx :: proc() {
     game_ctx.level = new(Level)
     new_level : SceneSave
     load_level_data(&new_level, .Test)
-    game_ctx.level^ = build_level_from_save(&new_level) 
+    game_ctx.level^ = build_level_from_save(&new_level)
 
     log.debugf("Scale factor : %v", game_ctx.res_scale_factor)
     center_cell := SCENE_LEVEL_DIM.x / 2
