@@ -164,7 +164,7 @@ box_kick_determine :: proc(arr: []CollisionBody, player: Player, allocator := co
     for i in 0..<len(arr){
         boxes[i] = arr[i].box
     }
-    filter := boxes_all_containing_position(rect = {player.prev_pos.x, player.prev_pos.y, 0,0}, arr = boxes[:])
+    //filter := boxes_all_containing_position(rect = {player.prev_pos.x, player.prev_pos.y, 0,0}, arr = boxes[:])
     hitbox := KICK_HITBOX
     hitbox.xy = player.prev_pos.xy + ([2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * player.prev_pos)
     for i := 0; i < sa.len(temp_static); i += 1 {
