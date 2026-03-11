@@ -4,6 +4,7 @@ import rl "vendor:raylib"
 import "core:log"
 import "core:c"
 import la "core:math/linalg"
+import sa "core:container/small_array"
 
 TARGET_FPS :: 30
 FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
@@ -22,7 +23,6 @@ RenderTexture :: rl.RenderTexture2D
 Camera :: rl.Camera2D
 
 Context :: struct {
-    collision_bodies        : [dynamic]CollisionBody,
     level_render            : RenderTexture,
     atlas                   : Texture,
     font                    : Font,
@@ -31,6 +31,7 @@ Context :: struct {
     update_timer            : f32,
     res_scale_factor        : f32,
     level                   : ^Level,
+    collision_ctx           : ^CollisionContext,
 }
 
 Player :: struct {
@@ -41,6 +42,7 @@ Player :: struct {
     prev_dir        : [2]int,
     prev_pos        : [2]f32,
     speed           : f32,
+    box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
 }
 
 Render :: struct {
@@ -89,10 +91,8 @@ init_game_ctx :: proc() {
     load_level_data(&new_level, .Test)
     game_ctx.level^ = build_level_from_save(&new_level)
 
-    log.debugf("Scale factor : %v", game_ctx.res_scale_factor)
     center_cell := SCENE_LEVEL_DIM.x / 2
     level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
-    log.debugf("Texture center : %v", level_center)
     // Center camera onto the center tile pos
     game_ctx.camera = FollowCamera {
 		offset = (screen_res / 2.0),
@@ -101,14 +101,29 @@ init_game_ctx :: proc() {
         zoom_speed = CAMERA_ZOOM_SPEED,
         target_zoom = 1.0,
 	}
-    log.debugf("Camera target : %v", game_ctx.camera.target)
+    game_ctx.collision_ctx = new(CollisionContext)
+    add_test_boxes(game_ctx.collision_ctx)
+}
+
+calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
+    dim := arr_cast(size * NATIVE_TILE_DIM.x, f32)
+    return {pos.x, pos.y, dim.x, dim.y }
+}
+
+// NOTE: For testing only
+add_test_boxes :: proc(ctx: ^CollisionContext) {
+    f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
+    test_box := box_create_tile_size(pos = {8, 8}, tile_size = [2]int{4, 4},thick = 1.0, state = .Man)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+    test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
 }
 
 init_player :: proc() {
     game_ctx.player = Player {
         render = { 
             anim = create_atlas_anim(.Player_Idle_Down, true),
-            offset = { -10, -12 },
+            offset = { -11, -14 },
         },
         dir_anims = { 
             .Up = .Player_Idle_Up,
@@ -118,14 +133,11 @@ init_player :: proc() {
         },
         speed = 2.0,
         kinematic_body = {
-            collision_body = {
-                box = {
-                    rectangle = {game_ctx.level.player_start_pos.x, game_ctx.level.player_start_pos.y, 12, 12},
-                    line_thickness = 1,
-                    color = rl.BLACK,
-                    state = .None },
-                kind = .Slide,
-            },
+            box = {
+            rectangle = {game_ctx.level.player_start_pos.x, game_ctx.level.player_start_pos.y, 10, 10},
+            line_thickness = 1,
+            color = rl.BLACK,
+            state = .None },
         },
     }
 }
@@ -180,11 +192,44 @@ handle_player_input :: proc(dt: f32) {
     } else {
         player.kinematic_body.vel = 0
     }
+
+    if is_input_pressed(action_inputs[.Shrink]) {
+        log.debug("Calling shrink!")
+        for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+            if area.has_player {
+                log.debug("Found box with player in it, setting size...")
+                box_set_size(&area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle)
+                log.debugf("New size : %v", area.rectangle.zw)
+            }
+        }
+    } else if is_input_pressed(action_inputs[.Grow]) {
+        for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+            if area.has_player {
+                log.debug("Found box with player in it, setting size...")
+                box_set_size(&area, area.tile_size + { 1, 1 }, player.kinematic_body.box.rectangle)
+                log.debugf("New size : %v", area.rectangle.zw)
+            }
+        }
+    }
 }
 
 physics_update :: proc (dt: f32) {
-    game_ctx.player.prev_pos = game_ctx.player.kinematic_body.collision_body.box.rectangle.xy
-    move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_bodies[:], dt)
+    game_ctx.player.prev_pos = game_ctx.player.kinematic_body.box.rectangle.xy
+    move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
+    // Only Check if Player Moved
+//    if game_ctx.player.prev_pos != get_pos_player(game_ctx.player) {
+        sa.clear(&game_ctx.player.box_states)
+        for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+            area.color = rl.WHITE
+            area.has_player = false
+            if rectangle_overlap(game_ctx.player.kinematic_body.box.rectangle, area.rectangle) {
+                area.color = rl.RED
+                area.has_player = true
+                append_box_state(area, &game_ctx.player.box_states)
+            }
+        }
+        log.debugf("Player states are : %v", sa.slice(&game_ctx.player.box_states))
+ //   }
 }
 
 // In a web build, this is called when browser changes size. Remove the

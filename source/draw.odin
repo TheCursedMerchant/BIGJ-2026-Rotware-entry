@@ -2,12 +2,13 @@ package game
 
 import rl "vendor:raylib"
 import la "core:math/linalg"
+import sa "core:container/small_array"
 
 BG_COLOR :: rl.Color{ 20, 30, 38, 255 }
 
 draw_frame :: proc(dt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
-	    rl.ClearBackground(BG_COLOR)
+	    rl.ClearBackground(rl.BLACK)
         paint_lvl_texture(dt)
     rl.EndTextureMode()
 
@@ -35,18 +36,15 @@ paint_lvl_texture :: proc(dt: f32) {
         }
         
         // Draw Collision Bodies
-        for body in game_ctx.collision_bodies {
-            box_draw(body.box)
-        }
+        for body in sa.slice(&game_ctx.collision_ctx.static) { box_draw(body) }
+        for body in sa.slice(&game_ctx.collision_ctx.box_areas) { box_draw(body) }
+        for body in sa.slice(&game_ctx.collision_ctx.kick_boxes) { box_draw(body.box) }
 
         // Draw Ents/Player
         player.render.pos = interpolate_pos(player.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
-        //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.collision_body.box), rl.RED)
-        level_center := (arr_cast(NATIVE_TILE_DIM, f32) * 12.0 * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
-        rl.DrawRectangle(i32(level_center.x), i32(level_center.y), 1, 1, rl.YELLOW)
-
+//        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
     rl.EndMode2D()
 }
 

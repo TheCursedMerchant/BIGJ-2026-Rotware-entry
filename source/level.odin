@@ -126,6 +126,10 @@ get_tile_from_grid_pos :: proc(pos : [2]int) -> ^Tile {
     return nil
 }
 
+get_tile_world_pos :: proc(pos: [2]int) -> [2]f32 {
+    return arr_cast(pos * NATIVE_TILE_DIM, f32)
+}
+
 pos_in_grid :: proc(pos: [2]int) -> bool {
     return pos.x >= 0 && pos.x < SCENE_LEVEL_DIM.x && pos.y >= 0 && pos.y < SCENE_LEVEL_DIM.y
 }

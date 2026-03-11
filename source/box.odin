@@ -4,10 +4,12 @@ package game
 import rl "vendor:raylib"
 import "core:slice"
 import sa "core:container/small_array"
+import la "core:math/linalg"
+import "core:log"
 
 // Constants
 
-MINIMUM_SIZE : f32 : 1
+MINIMUM_SIZE :: f32(NATIVE_TILE_DIM.x)
 MAXIMUM_SIZE : f32 : 100
 
 KICK_HITBOX :: Rectangle{0,0,10,10}
@@ -16,6 +18,7 @@ KICK_VELOCITY : [2]f32 : {10, 10}
 BOX_SMALL_ARRAY_SIZE :: 30
 BOX_STATE_SMALL_ARRAY_SIZE :: 10
 
+TILE_UNIT_RECT :: Rectangle{0, 0, f32(NATIVE_TILE_DIM.x), f32(NATIVE_TILE_DIM.y)}
 // Globals
 
 
@@ -33,10 +36,14 @@ Box_State :: enum u8 {
 Rectangle :: [4]f32 // x, y, w, h
 
 Box :: struct {
-    rectangle : Rectangle,
-    line_thickness : f32,
-    color : rl.Color,
-    state : Box_State,
+    rectangle       : Rectangle,
+    preview_rect    : Rectangle, 
+    color           : rl.Color,
+    tile_size       : [2]int, 
+    draw_offset     : [2]f32,
+    line_thickness  : f32,
+    state           : Box_State,
+    has_player      : b8,
 }
 
 Key_Value :: struct($T: typeid, $E: typeid) {
@@ -44,6 +51,7 @@ Key_Value :: struct($T: typeid, $E: typeid) {
     value : E,
 }
 
+BoxStateList :: sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State)
 
 // Procs
 
@@ -53,7 +61,8 @@ square_create :: proc(x, y, l: f32) -> (rect: Rectangle) {
 }
 
 rectangle_validity_check :: proc(rect: Rectangle) -> (bool) {
-    if rect.x >= 0 && rect.y >= 0 && rect.z >= 0 && rect.w >= 0 {
+    //if rect.x >= 0 && rect.y >= 0 && rect.z >= 0 && rect.w >= 0 {
+    if rect.z >= 0 && rect.w >= 0 {
         return true
     }
     return false
@@ -68,6 +77,32 @@ box_create :: proc(rect: Rectangle, thick: f32, color: rl.Color, state: Box_Stat
     return
 }
 
+box_create_tile_size :: proc(
+    pos: [2]int = {},
+    tile_size : [2]int = {},
+    thick: f32 = 1.0,
+    color: rl.Color = rl.WHITE,
+    state: Box_State = .None,
+) -> (box: Box) {
+    box.rectangle.xy = get_tile_world_pos(pos) 
+    box.rectangle.zw = arr_cast(tile_size * NATIVE_TILE_DIM, f32)
+    assert(rectangle_validity_check(box.rectangle)); assert(thick >= 0)
+    box.tile_size = tile_size
+    box.line_thickness = thick
+    box.color = color
+    box.state = state
+    set_box_preview_rect(&box)
+    return
+}
+
+set_box_preview_rect :: proc (box: ^Box) {
+    rect_center := box.rectangle.xy + ( box.rectangle.zw / 2.0 )
+    unit_rect_center := box.rectangle.xy + (TILE_UNIT_RECT.zw / 2.0)
+    center_offset := rect_center - unit_rect_center
+    box.preview_rect = TILE_UNIT_RECT
+    box.preview_rect.xy = box.rectangle.xy + center_offset
+}
+
 box_resize :: proc(box: ^Box, amount: f32) {
     box.rectangle.zw += amount
     if box.rectangle.z < 0 || box.rectangle.w < 0 {
@@ -77,10 +112,40 @@ box_resize :: proc(box: ^Box, amount: f32) {
     box.rectangle.xy -= (amount/2)
 }
 
+box_set_size :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
+    size := size
+    size.x = la.max(size.x, 1)
+    size.y = la.max(size.y, 1)
+    size_diff := size - box.tile_size
+
+    new_rect := box.rectangle
+    orig_center_offset := new_rect.zw / 2
+    new_size := arr_cast(size * NATIVE_TILE_DIM, f32)
+    new_rect.zw = new_size
+    new_rect.xy += orig_center_offset - (new_size / 2)
+    
+    player_in_min_size := box.has_player && size == {1, 1} && rectangle_overlap(new_rect, player_rect)
+    if size_diff == 0 || player_in_min_size do return
+
+    box.tile_size = size
+    box.rectangle = new_rect
+
+    // Update rectangle preview
+    set_box_preview_rect(box)
+}
+
 box_draw :: proc(box: Box) {
     assert(rectangle_validity_check(box.rectangle)); assert(box.line_thickness >= 0)
-    ray_rect := rl.Rectangle{box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w}
+    ray_rect := rl.Rectangle {
+        box.rectangle.x, 
+        box.rectangle.y, 
+        box.rectangle.z + box.draw_offset.x, 
+        box.rectangle.w + box.draw_offset.y
+    }
     rl.DrawRectangleLinesEx(ray_rect, box.line_thickness, box.color)
+    preview_color := rl.WHITE
+    preview_color.a = 20 // Make transparent
+    rl.DrawRectangleLinesEx(rect_to_rectangle(box.preview_rect), box.line_thickness, preview_color)
 }
 
 box_contains_position :: proc(rect: Rectangle, box: Box) -> (contains: bool) {
@@ -124,7 +189,6 @@ box_smallest_containing_position :: proc(rect: Rectangle, arr: []Box) -> (index:
 boxes_all_containing_position :: proc(
     rect: Rectangle, 
     arr: []Box, 
-    allocator := context.allocator
 ) -> (boxes: sa.Small_Array(BOX_SMALL_ARRAY_SIZE, Box)) {
     assert(len(arr) > 0); assert(rectangle_validity_check(rect))
     for i in 0..<len(arr) {
@@ -137,13 +201,19 @@ boxes_all_containing_position :: proc(
 
 box_state_find :: proc(
     arr: []Box
-) -> (key_state: sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State)) {
+) -> (key_state: BoxStateList) {
     for i in arr {
         if !slice.contains(sa.slice(&key_state), i.state) {
             sa.append(&key_state, i.state)
         }
     }
     return key_state
+}
+
+append_box_state :: proc(box: Box, list : ^$T) {
+    if !slice.contains(sa.slice(list), box.state) {
+        sa.append(list, box.state)
+    }
 }
 
 box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
@@ -157,22 +227,22 @@ box_state_swap :: proc(position: Rectangle, arr: []Box) -> (ok: bool) {
 }
 
 box_kick_determine :: proc(
-    arr: []CollisionBody, 
+    arr: []Box, 
     player: Player, 
-) -> (mobile, static: sa.Small_Array(BOX_SMALL_ARRAY_SIZE, CollisionBody)) {
+) -> (mobile, static: sa.Small_Array(BOX_SMALL_ARRAY_SIZE, Box)) {
     assert(len(arr) > 0)
     boxes : []Box
     for cb in arr {
         sa.push(&static, cb)
     }
     for i in 0..<len(arr){
-        boxes[i] = arr[i].box
+        boxes[i] = arr[i]
     }
     filter := boxes_all_containing_position(rect = {player.prev_pos.x, player.prev_pos.y, 0,0}, arr = boxes[:])
     hitbox := KICK_HITBOX
     hitbox.xy = player.prev_pos.xy + ([2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * player.prev_pos)
     for i := 0; i < sa.len(static); i += 1 {
-        if rectangle_overlap(hitbox, sa.get(static, i).box.rectangle) && !box_array_contains(sa.slice(&filter), sa.get(static, i).box) {
+        if rectangle_overlap(hitbox, sa.get(static, i).rectangle) && !box_array_contains(sa.slice(&filter), sa.get(static, i)) {
             sa.push(&mobile, sa.get(static, i))
             sa.unordered_remove(&static, i)
             i -= 1
@@ -191,13 +261,13 @@ box_kick_determine :: proc(
     }
 }
 
-box_kick_assign_kb :: proc(targets: []CollisionBody, player: Player, allocator := context.allocator) -> (k_bodies: []KinematicBody) {
+box_kick_assign_kb :: proc(targets: []Box, player: Player, allocator := context.allocator) -> (k_bodies: []KinematicBody) {
     assert(len(targets) > 0)
     temp : sa.Small_Array(BOX_SMALL_ARRAY_SIZE, KinematicBody)
     for i in 0..<len(targets) {
         vel := [2]f32{f32(player.prev_dir.x), f32(player.prev_dir.y)} * KICK_VELOCITY
         kb := KinematicBody{
-            collision_body = targets[i],
+            box = targets[i],
             remainder = 0,
             vel = vel,
         }
@@ -214,4 +284,8 @@ rectangle_overlap :: proc(a, b: Rectangle) -> (overlap: bool) {
     a_y1_smaller := a.y < b.y + b.w
     a_y2_larger := a.y + a.w > b.y
     return a_x1_smaller && a_x2_larger && a_y1_smaller && a_y2_larger
+}
+
+rect_to_rectangle :: proc (rect: Rectangle) -> rl.Rectangle {
+    return { rect.x, rect.y, rect.z, rect.w }
 }

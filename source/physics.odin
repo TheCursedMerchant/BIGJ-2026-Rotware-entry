@@ -1,24 +1,27 @@
 package game
 import la "core:math/linalg"
+import sa "core:container/small_array"
 
 // Check for Collisions
 MAX_ITERS :: 4
 DRAG : f32 : 60.0
 
-CollisionBodyKind :: enum { Static, Slide }
-
 KinematicBody :: struct {
-    collision_body  : CollisionBody,
+    box             : Box,
     remainder       : [2]f32,
     vel             : [2]f32,
 }
 
-CollisionBody :: struct {
-    box     : Box,
-    kind    : CollisionBodyKind,
+MAX_STATIC_BODIES :: 32
+MAX_BOX_BODIES :: 32
+
+CollisionContext :: struct {
+    static      : sa.Small_Array(MAX_STATIC_BODIES, Box),
+    box_areas   : sa.Small_Array(MAX_BOX_BODIES, Box),
+    kick_boxes  : sa.Small_Array(MAX_BOX_BODIES, KinematicBody),
 }
 
-move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
+move_x :: proc(kb: ^KinematicBody, solids : []Box) {
     kb.remainder.x += kb.vel.x
     move := la.floor(kb.remainder.x)
 
@@ -26,11 +29,11 @@ move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
         kb.remainder.x -= f32(move)
         sign := la.sign(move)
         has_collision : bool
-        test_rect := kb.collision_body.box.rectangle
+        test_rect := kb.box.rectangle
         for move != 0 {
             test_rect.x += f32(sign)
             for solid in solids {
-                if aabb_collision(test_rect, solid.box.rectangle) {
+                if aabb_collision(test_rect, solid.rectangle) {
                     has_collision = true
                     break
                 }
@@ -42,14 +45,14 @@ move_x :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
             } else {
                 test_rect.x += f32(sign)
                 move -= sign
-                kb.collision_body.box.rectangle = test_rect
+                kb.box.rectangle = test_rect
             }
         }
     }
 }
 
 
-move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
+move_y :: proc(kb: ^KinematicBody, solids : []Box) {
     kb.remainder.y += kb.vel.y
     move := la.floor(kb.remainder.y)
 
@@ -57,11 +60,11 @@ move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
         kb.remainder.y -= f32(move)
         sign := la.sign(move)
         has_collision : bool
-        test_rect := kb.collision_body.box.rectangle
+        test_rect := kb.box.rectangle
         for move != 0 {
             test_rect.y += f32(sign)
             for solid in solids {
-                if aabb_collision(test_rect, solid.box.rectangle) {
+                if aabb_collision(test_rect, solid.rectangle) {
                     has_collision = true
                     break
                 }
@@ -73,18 +76,19 @@ move_y :: proc(kb: ^KinematicBody, solids : []CollisionBody) {
             } else {
                 test_rect.y += f32(sign)
                 move -= sign
-                kb.collision_body.box.rectangle = test_rect
+                kb.box.rectangle = test_rect
             }
         }
     }
 }
 
-move_kinematic_body :: proc(kb: ^KinematicBody, solids : []CollisionBody, dt : f32) {
+move_kinematic_body :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f32) {
+    solids := sa.slice(&ctx.static)
     move_x(kb, solids)
     move_y(kb, solids)
 }
 
-collide_at :: proc(solids: []CollisionBody, pos : [2]f32) -> bool {
+collide_at :: proc(solids: []Box, pos : [2]f32) -> bool {
     return false
 }
 
@@ -114,9 +118,9 @@ get_pos_player :: proc(player: Player) -> [2]f32 {
 }
 
 get_pos_kinematic_body :: proc(kb: KinematicBody) -> [2]f32 {
-    return get_pos_collision_body(kb.collision_body)
+    return get_pos_collision_body(kb.box)
 }
 
-get_pos_collision_body :: proc(c_body: CollisionBody) -> [2]f32 {
-    return c_body.box.rectangle.xy
+get_pos_collision_body :: proc(c_body: Box) -> [2]f32 {
+    return c_body.rectangle.xy
 }
