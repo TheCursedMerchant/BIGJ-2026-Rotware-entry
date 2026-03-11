@@ -33,7 +33,8 @@ Level :: struct {
 }
 
 Tile :: struct {
-    render : Render,
+    render      : Render,
+    has_tile    : b8,
 }
 
 level_names := [LevelId]string {
@@ -41,7 +42,7 @@ level_names := [LevelId]string {
 }
 
 tile_anim_map := [TileTextureName]Animation_Name {
-    .Tile_Patch_0 = .Blue_Tile_Base,
+    .Tile_Patch_0 = .Place_Holder_Tile_Idle,
 }
 
 TileAnimMap :: [TileTextureName]Animation_Name
@@ -63,6 +64,7 @@ build_level_from_save :: proc(lvl: ^SceneSave) -> Level {
             if cell.has_tile {
                 n_tile.render.anim = create_atlas_anim(tile_anim_map[cell.tile_id])
                 n_tile.render.pos = draw_pos
+                n_tile.has_tile = true
             }
             if cell.has_ent {
                 if cell.ent_id == .Player {
@@ -72,4 +74,58 @@ build_level_from_save :: proc(lvl: ^SceneSave) -> Level {
         }
     }
     return out
+}
+
+update_tile_frames :: proc() {
+    t_frame : u8
+    for &tiles, x in &game_ctx.level.tiles {
+        for &tile, y in tiles {
+            t_frame = u8(tile.render.anim.current_frame)
+            t_frame += get_tile_frame({x, y})
+            tile.render.anim.current_frame = Texture_Name(t_frame)
+        }
+    }
+}
+
+// Auto tile Stuff
+CardinalDir :: enum { North, West, East, South }
+bit_dir := [CardinalDir]u8 {
+    .North = 1,
+    .West = 2,
+    .East = 4,
+    .South = 8,
+}
+
+vec_dir := [CardinalDir][2]int {
+    .North = {0, -1},
+    .West = {-1, 0},
+    .East = {1, 0},
+    .South = {0, 1},
+}
+
+get_tile_frame :: proc(pos : [2]int) -> (frame : u8) {
+    n_tile : ^Tile
+    for dir in CardinalDir {
+        n_tile = get_tile_from_grid_pos(vec_dir[dir] + pos)
+        if( n_tile != nil ) {
+            frame += bit_dir[dir] * u8(n_tile.has_tile)
+        }
+    }
+    return frame
+}
+
+get_tile_from_world_pos :: proc(pos : [2]f32) -> ^Tile {
+    grid_pos := arr_cast(pos / arr_cast(SCENE_LEVEL_DIM, f32), int)
+    return get_tile_from_grid_pos(grid_pos)
+}
+
+get_tile_from_grid_pos :: proc(pos : [2]int) -> ^Tile {
+    if pos_in_grid(pos) {
+        return &game_ctx.level.tiles[pos.x][pos.y]
+    }
+    return nil
+}
+
+pos_in_grid :: proc(pos: [2]int) -> bool {
+    return pos.x >= 0 && pos.x < SCENE_LEVEL_DIM.x && pos.y >= 0 && pos.y < SCENE_LEVEL_DIM.y
 }
