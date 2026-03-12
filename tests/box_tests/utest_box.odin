@@ -9,7 +9,7 @@ utest_box_resize :: proc(t: ^testing.T) {
     box := game.box_create(
         rect = {10, 10, 20, 20},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     game.box_resize(&box, 2)
@@ -24,19 +24,19 @@ utest_box_smallest_containing_position :: proc(t: ^testing.T) {
     bigger_box := game.box_create(
         rect = {10, 10, 20, 20},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     smaller_box := game.box_create(
         rect = {17, 17, 5, 5},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     smallest_box := game.box_create(
         rect = {19,19,2,2},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     arr := [3]game.Box{bigger_box, smallest_box, smaller_box}
@@ -52,31 +52,31 @@ utest_boxes_all_containing_position :: proc(t: ^testing.T) {
     box1 := game.box_create(
         rect = {0,0,100,100},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     box2 := game.box_create(
         rect = {10,10,80,80},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     box3 := game.box_create(
         rect = {20,20,60,60},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     box4 := game.box_create(
         rect = {30,30,40,40},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     box5 := game.box_create(
         rect = {40,40,20,20},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .None
     )
     position1 := game.Rectangle{50,50,0,0}
@@ -95,13 +95,13 @@ utest_box_state_swap :: proc(t: ^testing.T) {
     box1 := game.box_create(
         rect = {0,0,100,100},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .Man
     )
     box2 := game.box_create(
         rect = {10,10,80,80},
         thick = 1,
-        color = rl.BLACK,
+        colors = { .Primary = rl.BLACK, .Secondary = rl.WHITE },
         state = .Woman
     )
     position1 := game.Rectangle{50,50,0,0}

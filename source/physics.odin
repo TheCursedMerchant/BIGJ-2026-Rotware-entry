@@ -1,15 +1,24 @@
 package game
 import la "core:math/linalg"
 import sa "core:container/small_array"
+import "core:log"
+import rl "vendor:raylib"
 
 // Check for Collisions
 MAX_ITERS :: 4
 DRAG : f32 : 60.0
+BOX_SPEED :: 10.0
 
 KinematicBody :: struct {
     box             : Box,
     remainder       : [2]f32,
     vel             : [2]f32,
+    prev_pos        : [2]f32,
+}
+
+AxisVel :: struct {
+    remainder   : f32,
+    vel         : f32,
 }
 
 MAX_STATIC_BODIES :: 32
@@ -21,17 +30,40 @@ CollisionContext :: struct {
     kick_boxes  : sa.Small_Array(MAX_BOX_BODIES, KinematicBody),
 }
 
-move_x :: proc(kb: ^KinematicBody, solids : []Box) {
-    kb.remainder.x += kb.vel.x
-    move := la.floor(kb.remainder.x)
+add_area_box :: proc(
+    ctx : ^CollisionContext,
+    pos: [2]int = {},
+    tile_size : [2]int = {},
+    thick: f32 = 1.0,
+    colors: [BoxColor]rl.Color = { .Primary = rl.WHITE, .Secondary = rl.RED },
+    state: Box_State = .None,
+) {
+    box := box_create_tile_size(pos, tile_size, thick, colors, state) 
+    sa.append(&ctx.box_areas, box)
+}
+
+move_axis :: proc(
+    kb          : ^KinematicBody,
+    colliders   : ^sa.Small_Array(16, int),
+    solids      : []Box,
+    k_bodies    : []KinematicBody,
+    axis_vec    : [2]f32,
+) {
+    axis_vel := axis_vec * kb.vel 
+    axis_remainder := axis_vec * kb.remainder
+    vel := get_axis(axis_vel)
+    remainder := get_axis(axis_remainder)
+
+    remainder += vel
+    move := la.floor(remainder)
 
     if (move != 0) {
-        kb.remainder.x -= f32(move)
+        remainder -= f32(move)
         sign := la.sign(move)
         has_collision : bool
         test_rect := kb.box.rectangle
         for move != 0 {
-            test_rect.x += f32(sign)
+            test_rect.xy += f32(sign) * axis_vec
             for solid in solids {
                 if aabb_collision(test_rect, solid.rectangle) {
                     has_collision = true
@@ -39,53 +71,50 @@ move_x :: proc(kb: ^KinematicBody, solids : []Box) {
                 }
             }
 
+            for &k, idx in k_bodies { 
+                if aabb_collision(test_rect, k.box.rectangle) && (&k != kb) {
+                    has_collision = true
+                    sa.append(colliders, idx)
+                    break
+                }
+            }
+
             if has_collision {
-                kb.vel.x = 0
+                kb.remainder = remainder * axis_vec
+                kb.vel *= axis_vec.yx
                 break
             } else {
-                test_rect.x += f32(sign)
+                test_rect.xy += f32(sign) * axis_vec
                 move -= sign
+                kb.remainder = remainder * axis_vec
                 kb.box.rectangle = test_rect
             }
         }
     }
 }
 
-
-move_y :: proc(kb: ^KinematicBody, solids : []Box) {
-    kb.remainder.y += kb.vel.y
-    move := la.floor(kb.remainder.y)
-
-    if (move != 0) {
-        kb.remainder.y -= f32(move)
-        sign := la.sign(move)
-        has_collision : bool
-        test_rect := kb.box.rectangle
-        for move != 0 {
-            test_rect.y += f32(sign)
-            for solid in solids {
-                if aabb_collision(test_rect, solid.rectangle) {
-                    has_collision = true
-                    break
-                }
-            }
-
-            if has_collision {
-                kb.vel.y = 0
-                break
-            } else {
-                test_rect.y += f32(sign)
-                move -= sign
-                kb.box.rectangle = test_rect
-            }
-        }
+// Returns non zero axis
+get_axis :: proc(vec: [2]f32) -> f32 {
+    if vec.x != 0 {
+        return vec.x
+    } else {
+        return vec.y
     }
 }
 
 move_kinematic_body :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f32) {
     solids := sa.slice(&ctx.static)
-    move_x(kb, solids)
-    move_y(kb, solids)
+    k_bodies := sa.slice(&ctx.kick_boxes)
+    collider_idxs : sa.Small_Array(16, int)
+    mv_dir := la.normalize(kb.vel)
+    move_axis(kb, &collider_idxs, solids, k_bodies, { 1.0, 0.0 })
+    move_axis(kb, &collider_idxs, solids, k_bodies, { 0.0, 1.0 })
+    target_vel : [2]f32
+    for idx in sa.slice(&collider_idxs) {
+        target_vel = mv_dir * BOX_SPEED
+        ctx.kick_boxes.data[idx].vel = target_vel
+        log.debugf("Kicked box mv dir : %v", mv_dir)
+    }
 }
 
 collide_at :: proc(solids: []Box, pos : [2]f32) -> bool {

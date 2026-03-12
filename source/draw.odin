@@ -38,10 +38,13 @@ paint_lvl_texture :: proc(dt: f32) {
         // Draw Collision Bodies
         for body in sa.slice(&game_ctx.collision_ctx.static) { box_draw(body) }
         for body in sa.slice(&game_ctx.collision_ctx.box_areas) { box_draw(body) }
-        for body in sa.slice(&game_ctx.collision_ctx.kick_boxes) { box_draw(body.box) }
+        for &body in sa.slice(&game_ctx.collision_ctx.kick_boxes) { 
+            body.box.draw_pos = interpolate_pos(body.prev_pos, get_pos(body), dt)
+            box_draw(body.box) 
+        }
 
         // Draw Ents/Player
-        player.render.pos = interpolate_pos(player.prev_pos, get_pos(player^), dt)
+        player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
 //        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)

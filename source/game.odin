@@ -40,7 +40,6 @@ Player :: struct {
     kinematic_body  : KinematicBody,
     last_dir_input  : DirectionInput,
     prev_dir        : [2]int,
-    prev_pos        : [2]f32,
     speed           : f32,
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
 }
@@ -117,6 +116,22 @@ add_test_boxes :: proc(ctx: ^CollisionContext) {
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
     test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0, state = .Woman)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+
+    test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+    test_box = box_create_tile_size(pos = {8, 10}, tile_size = [2]int{1, 1},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+    test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+    test_box = box_create_tile_size(pos = {16, 16}, tile_size = [2]int{2, 1},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+    test_box = box_create_tile_size(pos = {20, 20}, tile_size = [2]int{3, 4},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+    test_box = box_create_tile_size(pos = {8, 20}, tile_size = [2]int{1, 2},thick = 1.0, state = .Woman)
+    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+
+    test_box = box_create_tile_size(pos = {10, 10}, tile_size = [2]int{1, 1},thick = 1.0)
+    sa.append(&game_ctx.collision_ctx.static, test_box)
 }
 
 init_player :: proc() {
@@ -194,42 +209,46 @@ handle_player_input :: proc(dt: f32) {
     }
 
     if is_input_pressed(action_inputs[.Shrink]) {
-        log.debug("Calling shrink!")
-        for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+        for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
             if area.has_player {
-                log.debug("Found box with player in it, setting size...")
-                box_set_size(&area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle)
-                log.debugf("New size : %v", area.rectangle.zw)
+                shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
             }
         }
     } else if is_input_pressed(action_inputs[.Grow]) {
         for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
             if area.has_player {
-                log.debug("Found box with player in it, setting size...")
                 box_set_size(&area, area.tile_size + { 1, 1 }, player.kinematic_body.box.rectangle)
-                log.debugf("New size : %v", area.rectangle.zw)
             }
         }
     }
 }
 
 physics_update :: proc (dt: f32) {
-    game_ctx.player.prev_pos = game_ctx.player.kinematic_body.box.rectangle.xy
+    game_ctx.player.kinematic_body.prev_pos = game_ctx.player.kinematic_body.box.rectangle.xy
     move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
-    // Only Check if Player Moved
-//    if game_ctx.player.prev_pos != get_pos_player(game_ctx.player) {
-        sa.clear(&game_ctx.player.box_states)
-        for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
-            area.color = rl.WHITE
-            area.has_player = false
-            if rectangle_overlap(game_ctx.player.kinematic_body.box.rectangle, area.rectangle) {
-                area.color = rl.RED
-                area.has_player = true
-                append_box_state(area, &game_ctx.player.box_states)
+    sa.clear(&game_ctx.player.box_states)
+    for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+        area.color = area.colors[.Primary]
+        area.preview_rect = {}
+        area.preview_color.rgb = area.colors[.Primary].rgb
+        area.has_player = false
+        if rectangle_overlap(game_ctx.player.kinematic_body.box.rectangle, area.rectangle) {
+            area.color = area.colors[.Secondary]
+            area.has_player = true
+            append_box_state(area, &game_ctx.player.box_states)
+            set_box_preview_rect(&area)
+            if rectangle_overlap(game_ctx.player.kinematic_body.box.rectangle, area.preview_rect) {
+                area.preview_color.rgb = area.colors[.Secondary].rgb
             }
         }
-        log.debugf("Player states are : %v", sa.slice(&game_ctx.player.box_states))
- //   }
+    }
+
+    for &kb in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
+        kb.prev_pos = kb.box.rectangle.xy
+        kb.vel = la.lerp(kb.vel, [2]f32{}, 12.0 * dt)
+        if abs(kb.vel.x) < 0.05 && abs(kb.vel.y) < 0.05 do kb.vel = {}
+        move_kinematic_body(&kb, game_ctx.collision_ctx, dt)
+    }
 }
 
 // In a web build, this is called when browser changes size. Remove the
