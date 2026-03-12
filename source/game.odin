@@ -119,8 +119,6 @@ add_test_boxes :: proc(ctx: ^CollisionContext) {
 
     test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0, state = .Woman)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {8, 10}, tile_size = [2]int{1, 1},thick = 1.0, state = .Woman)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
     test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0, state = .Woman)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
     test_box = box_create_tile_size(pos = {16, 16}, tile_size = [2]int{2, 1},thick = 1.0, state = .Woman)
@@ -129,9 +127,6 @@ add_test_boxes :: proc(ctx: ^CollisionContext) {
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
     test_box = box_create_tile_size(pos = {8, 20}, tile_size = [2]int{1, 2},thick = 1.0, state = .Woman)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-
-    test_box = box_create_tile_size(pos = {10, 10}, tile_size = [2]int{1, 1},thick = 1.0)
-    sa.append(&game_ctx.collision_ctx.static, test_box)
 }
 
 init_player :: proc() {

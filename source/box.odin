@@ -45,7 +45,6 @@ Box :: struct {
     color           : rl.Color,
     tile_size       : [2]int, 
     draw_offset     : [2]f32,
-    draw_pos        : [2]f32,
     creator_idx     : int,
     line_thickness  : f32,
     state           : Box_State,
@@ -90,7 +89,6 @@ box_create_tile_size :: proc(
 box_create :: proc(rect: Rectangle, thick: f32, colors: [BoxColor]rl.Color, state: Box_State) -> (box: Box) {
     assert(rectangle_validity_check(rect)); assert(thick >= 0)
     box.rectangle = rect
-    box.draw_pos = rect.xy
     box.line_thickness = thick
     box.colors = colors
     box.color = box.colors[.Primary]
@@ -119,7 +117,24 @@ box_resize :: proc(box: ^Box, amount: f32) {
     box.rectangle.xy -= (amount/2)
 }
 
-box_set_size :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
+
+box_set_size :: proc {
+    box_set_size_player,
+    box_set_size_kb,
+}
+
+box_set_size_kb :: proc(box: ^Box, size : [2]int, player_rect : Rectangle, k_bodies : []KinematicBody) {
+    if size == {1, 1} {
+        for kb in k_bodies {
+            if rectangle_overlap(kb.box.rectangle, box.preview_rect) {
+                return
+            }
+        }
+    }
+    box_set_size_player(box, size, player_rect)
+}
+
+box_set_size_player :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
     size := size
     size.x = la.max(size.x, 1)
     size.y = la.max(size.y, 1)
@@ -142,22 +157,44 @@ box_set_size :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
 }
 
 shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect : Rectangle, box_idx: int) {
-    box_set_size(box, size, player_rect)
+    box_set_size_kb(box, size, player_rect, sa.slice(&ctx.kick_boxes))
     if box.tile_size == { 1, 1 } {
-        kick_box := KinematicBody { box = box^ }
-        kick_box.box.color = kick_box.box.colors[.Primary]
-        kick_box.box.creator_idx = box_idx
+        kick_box := KinematicBody {
+            box = {
+                tile_size = box.tile_size,
+                rectangle = box.rectangle,
+                colors = box.colors,
+                color = box.colors[.Primary],
+                line_thickness = 1.0,
+                creator_idx = box_idx
+            },
+            prev_pos = box.rectangle.xy,
+        }
+        sa.append(&ctx.kick_boxes, kick_box)
         box.rectangle = {}
         box.preview_rect = {}
-        sa.append(&ctx.kick_boxes, kick_box)
+        box.preview_color = {}
+        box.has_player = false
     }
 }
 
 box_draw :: proc(box: Box) {
     assert(rectangle_validity_check(box.rectangle)); assert(box.line_thickness >= 0)
     ray_rect := rl.Rectangle {
-        box.draw_pos.x, 
-        box.draw_pos.y, 
+        box.rectangle.x, 
+        box.rectangle.y, 
+        box.rectangle.z + box.draw_offset.x, 
+        box.rectangle.w + box.draw_offset.y
+    }
+    rl.DrawRectangleLinesEx(ray_rect, box.line_thickness, box.color)
+    rl.DrawRectangleLinesEx(rect_to_rectangle(box.preview_rect), box.line_thickness, box.preview_color)
+}
+
+box_draw_at_pos :: proc(box: Box, pos : [2]f32) {
+    assert(rectangle_validity_check(box.rectangle)); assert(box.line_thickness >= 0)
+    ray_rect := rl.Rectangle {
+        pos.x, 
+        pos.y, 
         box.rectangle.z + box.draw_offset.x, 
         box.rectangle.w + box.draw_offset.y
     }
