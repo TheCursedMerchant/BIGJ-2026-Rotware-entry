@@ -8,6 +8,7 @@ import rl "vendor:raylib"
 MAX_ITERS :: 4
 DRAG : f32 : 60.0
 BOX_SPEED :: 10.0
+KICK_SHAKE_INTENSITY :: 6.5
 
 KinematicBody :: struct {
     box             : Box,
@@ -73,6 +74,7 @@ move_axis :: proc(
 
             for &k, idx in k_bodies { 
                 if aabb_collision(test_rect, k.box.rectangle) && (&k != kb) {
+                    shake_cam(KICK_SHAKE_INTENSITY)
                     has_collision = true
                     sa.append(colliders, idx)
                     break

@@ -96,9 +96,11 @@ init_game_ctx :: proc() {
     game_ctx.camera = FollowCamera {
 		offset = (screen_res / 2.0),
 		target = level_center,
+        origin_pos = level_center,
 		zoom   = 1.0,
         zoom_speed = CAMERA_ZOOM_SPEED,
         target_zoom = 1.0,
+        shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
     game_ctx.collision_ctx = new(CollisionContext)
     add_test_boxes(game_ctx.collision_ctx)
