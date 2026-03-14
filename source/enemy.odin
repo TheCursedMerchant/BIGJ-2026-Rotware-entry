@@ -40,7 +40,7 @@ move_attack_player :: proc(enemy : ^Enemy) {
         if enemy.attack_timer <= 0 {
             enemy.attack_timer = enemy.attack_rate
             enemy.hit_rect.xy = enemy_center + (dir_to_player * enemy.attack_range)
-            if aabb_collision(enemy.hit_rect, player_rect) {
+            if rectangle_overlap(enemy.hit_rect, player_rect) {
                 log.debugf("Damage dealt!", enemy.damage)
             }
         }
@@ -74,12 +74,13 @@ basic_enemy_at_pos :: proc(pos : [2]int) -> Enemy {
 kill_enemy :: proc(idx: int, data : ^EnemyData) {
     shake_cam(KICK_SHAKE_INTENSITY)
     enemy := &game_ctx.enemies.active[idx]
-    enemy^ = { state = .Dead }
+    enemy^ = Enemy{ state = .Dead }
     append(&data.dead, idx)
 }
 
 add_enemy :: proc(enemy: Enemy, data: ^EnemyData) {
     if len(data.dead) > 0 {
+        log.debug("Reactivating dead entity!")
         next_idx := pop(&data.dead)
         data.active[next_idx] = enemy
     } else {

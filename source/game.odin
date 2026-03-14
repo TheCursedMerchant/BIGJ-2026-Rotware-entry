@@ -5,6 +5,7 @@ import "core:log"
 import "core:c"
 import la "core:math/linalg"
 import sa "core:container/small_array"
+import "core:mem"
 
 TARGET_FPS :: 30
 FIXED_TIME_STEP :: 1.0 / f32(TARGET_FPS)
@@ -76,12 +77,17 @@ ColorRender :: struct {
 
 run: bool
 game_ctx : ^Context
+main_allocator : mem.Allocator
+main_arena : mem.Arena
+main_block : []u8
 
 init :: proc() {
     run = true
 	rl.SetConfigFlags({.WINDOW_RESIZABLE, .VSYNC_HINT})
 	rl.InitWindow(TARGET_RES.x, TARGET_RES.y, "Kick Boxing")
     rl.SetTargetFPS(120)
+
+    make_p_arena_alloc(&main_allocator, &main_arena, &main_block, 5 * mem.Megabyte)
 
     init_game_ctx()
     update_tile_frames()
@@ -99,6 +105,7 @@ init :: proc() {
         log.info("Audio device is ready!")
         // TODO: Load Sounds Here
     }
+
 
     log.debugf("Color render size : %v", size_of(ColorRender))
     log.debugf("Context size : %v", size_of(Context))
@@ -131,9 +138,9 @@ init_game_ctx :: proc() {
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
     game_ctx.collision_ctx = new(CollisionContext)
-    game_ctx.enemies = new(EnemyData)
-    game_ctx.enemies.active = make([dynamic]Enemy, 0, 32)
-    game_ctx.enemies.dead = make([dynamic]int, 0, 32)
+    game_ctx.enemies = new(EnemyData, main_allocator)
+    game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
+    game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
     add_test_data(game_ctx.collision_ctx)
     game_ctx.timers[.After_Image] = { duration = 0.064 }
 }
@@ -190,10 +197,34 @@ init_player :: proc() {
     }
 }
 
+reset_level :: proc () {
+    log.debug("Resetting game!")
+    free_all(context.temp_allocator)
+    free_all(main_allocator)
+    init_player()
+    game_ctx.collision_ctx^ = CollisionContext{}
+    center_cell := SCENE_LEVEL_DIM.x / 2
+    level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
+    screen_res := arr_cast(TARGET_RES, f32)
+    game_ctx.camera = FollowCamera {
+		offset = (screen_res / 2.0),
+		target = level_center,
+        origin_pos = level_center,
+		zoom   = 1.0,
+        zoom_speed = CAMERA_ZOOM_SPEED,
+        target_zoom = 1.0,
+        shake = { fall_off = FALL_OFF_THRESHHOLD }
+	}
+    game_ctx.enemies = new(EnemyData, main_allocator)
+    game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
+    game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
+    add_test_data(game_ctx.collision_ctx)
+}
+
 update :: proc() {
+    if rl.IsKeyPressed(.R) { reset_level() }
     dt := rl.GetFrameTime()
     game_ctx.update_timer += dt
-
     after_image_t := &game_ctx.timers[.After_Image] 
     if after_image_t.running {
         after_image_t.time_left -= dt
@@ -208,8 +239,10 @@ update :: proc() {
 
     // TODO: Remove testing only
     if rl.IsKeyPressed(.N) {
+        log.debug("Increasing zoom!")
         update_camera_zoom(1.0)
     } else if rl.IsKeyPressed(.M) {
+        log.debug("Decreasing zoom!")
         update_camera_zoom(-1.0)
     }
 
@@ -225,7 +258,6 @@ update :: proc() {
     }
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
-
     update_camera(interpolated_dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
@@ -352,7 +384,8 @@ physics_update :: proc (dt: f32) {
         if enemy.state == .Dead do continue
         enemy.kb.prev_pos = enemy.kb.box.rectangle.xy
         enemy.kb.vel = la.lerp(enemy.kb.vel, [2]f32{}, 12.0 * dt)
-        if vec_comp_in_range(la.abs(enemy.kb.vel), [2]f32{ 0.05, 0.05 }) do enemy.kb.vel = {}
+        if abs(enemy.kb.vel.x) < 0.05 && abs(enemy.kb.vel.y) < 0.05 do enemy.kb.vel = {}
+        //if vec_comp_in_range(la.abs(enemy.kb.vel), [2]f32{ 0.05, 0.05 }) do enemy.kb.vel = {}
         enemy_move_kinematic_body(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
     }
 }
@@ -421,4 +454,15 @@ arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
 
 box_to_rect :: proc(box: Box) -> rl.Rectangle {
     return rl.Rectangle{ box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w }
+}
+
+make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[]byte, size: uint) {
+    arena_err : mem.Allocator_Error
+    block^, arena_err = make([]byte, size)
+    if arena_err != nil {
+        log.errorf("Failed to init arena with err : %v", arena_err)
+        assert(false)
+    }
+    mem.arena_init(arena, block^)
+    alloc^ = mem.arena_allocator(arena)
 }
