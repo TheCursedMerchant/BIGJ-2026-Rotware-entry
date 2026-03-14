@@ -95,6 +95,58 @@ move_axis :: proc(
     }
 }
 
+enemy_move_axis :: proc(
+    kb          : ^KinematicBody,
+    colliders   : ^sa.Small_Array(16, int),
+    solids      : []Box,
+    enemies     : []Enemy,
+    axis_vec    : [2]f32,
+) {
+    axis_vel := axis_vec * kb.vel 
+    axis_remainder := axis_vec * kb.remainder
+    vel := get_axis(axis_vel)
+    remainder := get_axis(axis_remainder)
+
+    remainder += vel
+    move := la.floor(remainder)
+
+    if (move != 0) {
+        remainder -= f32(move)
+        sign := la.sign(move)
+        has_collision : bool
+        test_rect := kb.box.rectangle
+        for move != 0 {
+            test_rect.xy += f32(sign) * axis_vec
+            for solid in solids {
+                if aabb_collision(test_rect, solid.rectangle) {
+                    has_collision = true
+                    break
+                }
+            }
+
+            for &e, idx in enemies {
+                if e.state == .Dead do continue
+                if aabb_collision(test_rect, e.kb.box.rectangle) && (&e.kb != kb) {
+                    has_collision = true
+                    sa.append(colliders, idx)
+                    break
+                }
+            }
+
+            if has_collision {
+                kb.remainder = remainder * axis_vec
+                kb.vel *= axis_vec.yx
+                break
+            } else {
+                test_rect.xy += f32(sign) * axis_vec
+                move -= sign
+                kb.remainder = remainder * axis_vec
+                kb.box.rectangle = test_rect
+            }
+        }
+    }
+}
+
 // Returns non zero axis
 get_axis :: proc(vec: [2]f32) -> f32 {
     if vec.x != 0 {
@@ -115,12 +167,20 @@ move_kinematic_body :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f3
     for idx in sa.slice(&collider_idxs) {
         target_vel = mv_dir * BOX_SPEED
         ctx.kick_boxes.data[idx].vel = target_vel
-        log.debugf("Kicked box mv dir : %v", mv_dir)
     }
 }
 
-collide_at :: proc(solids: []Box, pos : [2]f32) -> bool {
-    return false
+enemy_move_kinematic_body :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, enemies : []Enemy, dt : f32) {
+    solids := sa.slice(&ctx.static)
+    collider_idxs : sa.Small_Array(16, int)
+    mv_dir := la.normalize(kb.vel)
+    enemy_move_axis(kb, &collider_idxs, solids, enemies, { 1.0, 0.0 })
+    enemy_move_axis(kb, &collider_idxs, solids, enemies, { 0.0, 1.0 })
+    target_vel : [2]f32
+    for idx in sa.slice(&collider_idxs) {
+        target_vel = mv_dir * BOX_SPEED
+        ctx.kick_boxes.data[idx].vel = target_vel
+    }
 }
 
 point_in_rect :: proc(point : [2]f32, rect: Rectangle) -> bool {

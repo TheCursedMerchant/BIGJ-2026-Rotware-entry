@@ -3,6 +3,7 @@ package game
 import rl "vendor:raylib"
 import la "core:math/linalg"
 import sa "core:container/small_array"
+import "core:log"
 
 BG_COLOR :: rl.Color{ 20, 30, 38, 255 }
 
@@ -44,12 +45,31 @@ paint_lvl_texture :: proc(dt: f32) {
             box_draw_at_pos(body.box, kb_draw_pos) 
         }
 
+        //Draw Enemies
+        for enemy in game_ctx.enemies.active {
+            kb_draw_pos = interpolate_pos(enemy.kb.prev_pos, enemy.kb.box.rectangle.xy, dt)
+            box_draw_at_pos(enemy.kb.box, kb_draw_pos) 
+        }
+
         // Draw Ents/Player
+        #reverse for &render, idx in sa.slice(&player.after_images) { 
+            draw_fade_render(&render, 20.0) 
+            if render.fcolor.a == 0 { sa.unordered_remove(&player.after_images, idx) }
+        }
         player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
 //        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
     rl.EndMode2D()
+}
+
+draw_fade_render :: proc(render: ^ColorRender, fade_amount : f32) {
+    render.fcolor.a = la.max(render.fcolor.a - fade_amount, 0)
+    render.fcolor.rg -= { fade_amount, fade_amount }
+    tint := rl.WHITE
+    tint.a = u8(render.fcolor.a)
+    tint.rg = arr_cast(render.fcolor.rg, u8)
+    draw_pixel_perfect_render(render.render, tint)
 }
 
 draw_pixel_perfect_render :: proc(render: Render, tint: rl.Color = rl.WHITE) {

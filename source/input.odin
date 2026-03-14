@@ -5,6 +5,8 @@ import rl "vendor:raylib"
 ActionInputKind :: enum {
     Shrink,
     Grow,
+    Dash,
+    Kick,
 }
 
 ActionInput :: struct {
@@ -37,6 +39,8 @@ dir_inputs := [DirectionInputKind]DirectionInput {
 action_inputs := [ActionInputKind]ActionInput {
     .Shrink = { .H, .Shrink },
     .Grow = { .J, .Grow },
+    .Dash = { .K, .Dash },
+    .Kick = {},
 }
 
 // TODO: Add versions that take regular inputs that don't 

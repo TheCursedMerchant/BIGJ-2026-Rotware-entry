@@ -13,6 +13,10 @@ NATIVE_RES :: [2]i32{ 768, 432 }
 NATIVE_TILE_DIM :: [2]int{ 16, 16 }
 SCENE_LEVEL_DIM :: [2]int{ 25, 25 }
 CAMERA_ZOOM_SPEED :: 2.5
+DASH_MULTIPLIER :: 4.0
+DASH_FALL_OFF :: [2]f32{ 1.0, 1.0 }
+MAX_TIMERS :: 16
+SLAM_KICK_SHAKE :: 13
 
 // Alias's
 Font :: rl.Font
@@ -23,6 +27,7 @@ RenderTexture :: rl.RenderTexture2D
 Camera :: rl.Camera2D
 
 Context :: struct {
+    timers                  : [TimerTag]Timer,
     level_render            : RenderTexture,
     atlas                   : Texture,
     font                    : Font,
@@ -30,24 +35,43 @@ Context :: struct {
     camera                  : FollowCamera,
     update_timer            : f32,
     res_scale_factor        : f32,
+    enemies                 : ^EnemyData,
     level                   : ^Level,
     collision_ctx           : ^CollisionContext,
 }
 
+TimerTag :: enum { After_Image }
+Timer :: struct {
+    time_left   : f32,
+    duration    : f32,
+    running     : bool,
+    callback    : proc(),
+}
+
+PlayerState :: enum { Idle, Dash }
+
 Player :: struct {
     render          : Render,
+    after_images    : sa.Small_Array(4, ColorRender),
     dir_anims       : [DirectionInputKind]Animation_Name,
     kinematic_body  : KinematicBody,
     last_dir_input  : DirectionInput,
+    render_color    : [4]f32,
     prev_dir        : [2]int,
     speed           : f32,
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
+    state           : PlayerState,
 }
 
 Render :: struct {
     anim    : Animation,
     pos     : [2]f32,
     offset  : [2]f32,
+}
+
+ColorRender :: struct {
+    render : Render,
+    fcolor : [4]f32,
 }
 
 run: bool
@@ -75,6 +99,10 @@ init :: proc() {
         log.info("Audio device is ready!")
         // TODO: Load Sounds Here
     }
+
+    log.debugf("Color render size : %v", size_of(ColorRender))
+    log.debugf("Context size : %v", size_of(Context))
+    log.debugf("Collision Context size : %v", size_of(CollisionContext))
 }
 
 init_game_ctx :: proc() {
@@ -103,7 +131,11 @@ init_game_ctx :: proc() {
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
     game_ctx.collision_ctx = new(CollisionContext)
-    add_test_boxes(game_ctx.collision_ctx)
+    game_ctx.enemies = new(EnemyData)
+    game_ctx.enemies.active = make([dynamic]Enemy, 0, 32)
+    game_ctx.enemies.dead = make([dynamic]int, 0, 32)
+    add_test_data(game_ctx.collision_ctx)
+    game_ctx.timers[.After_Image] = { duration = 0.064 }
 }
 
 calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
@@ -112,7 +144,7 @@ calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
 }
 
 // NOTE: For testing only
-add_test_boxes :: proc(ctx: ^CollisionContext) {
+add_test_data :: proc(ctx: ^CollisionContext) {
     f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
     test_box := box_create_tile_size(pos = {8, 8}, tile_size = [2]int{4, 4},thick = 1.0, state = .Man)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
@@ -123,12 +155,14 @@ add_test_boxes :: proc(ctx: ^CollisionContext) {
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
     test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0, state = .Woman)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {16, 16}, tile_size = [2]int{2, 1},thick = 1.0, state = .Woman)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {20, 20}, tile_size = [2]int{3, 4},thick = 1.0, state = .Woman)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {8, 20}, tile_size = [2]int{1, 2},thick = 1.0, state = .Woman)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+
+   add_enemy(basic_enemy_at_pos({ 1, 1 }), game_ctx.enemies)
+   add_enemy(basic_enemy_at_pos({ 1, 2 }), game_ctx.enemies)
+   add_enemy(basic_enemy_at_pos({ 1, 3 }), game_ctx.enemies)
+   add_enemy(basic_enemy_at_pos({ 1, 4 }), game_ctx.enemies)
+   add_enemy(basic_enemy_at_pos({ 1, 5 }), game_ctx.enemies)
+   add_enemy(basic_enemy_at_pos({ 1, 6 }), game_ctx.enemies)
+   add_enemy(basic_enemy_at_pos({ 1, 7 }), game_ctx.enemies)
 }
 
 init_player :: proc() {
@@ -137,19 +171,21 @@ init_player :: proc() {
             anim = create_atlas_anim(.Player_Idle_Down, true),
             offset = { -11, -14 },
         },
+        render_color = { 255.0, 255.0, 255.0, 255.0 },
         dir_anims = { 
             .Up = .Player_Idle_Up,
             .Down = .Player_Idle_Down,
             .Left = .Player_Idle_Left,
             .Right = .Player_Idle_Right,
         },
-        speed = 2.0,
+        speed = 6.0,
         kinematic_body = {
             box = {
-            rectangle = {game_ctx.level.player_start_pos.x, game_ctx.level.player_start_pos.y, 10, 10},
-            line_thickness = 1,
-            color = rl.BLACK,
-            state = .None },
+            rectangle = { game_ctx.level.player_start_pos.x, game_ctx.level.player_start_pos.y, 10, 10 },
+                line_thickness = 1,
+                color = rl.BLACK,
+                state = .None,
+            },
         },
     }
 }
@@ -157,6 +193,18 @@ init_player :: proc() {
 update :: proc() {
     dt := rl.GetFrameTime()
     game_ctx.update_timer += dt
+
+    after_image_t := &game_ctx.timers[.After_Image] 
+    if after_image_t.running {
+        after_image_t.time_left -= dt
+        if after_image_t.time_left <= 0 {
+            after_image_t.running = false
+            if game_ctx.player.state == .Dash {
+                create_player_after_image()
+                start_timer(after_image_t)
+            }
+        }
+    }
 
     // TODO: Remove testing only
     if rl.IsKeyPressed(.N) {
@@ -168,6 +216,10 @@ update :: proc() {
     handle_player_input(FIXED_TIME_STEP)
 
     for game_ctx.update_timer >= FIXED_TIME_STEP {
+        for &enemy in game_ctx.enemies.active {
+            enemy.attack_timer -= FIXED_TIME_STEP
+            run_state_basic(&enemy)
+        }
         game_ctx.update_timer -= FIXED_TIME_STEP
         physics_update(FIXED_TIME_STEP)
     }
@@ -180,8 +232,23 @@ update :: proc() {
 }
 
 handle_player_input :: proc(dt: f32) {
-    mv_dir : [2]int
     player := &game_ctx.player
+    switch player.state {
+        case .Idle: handle_player_idle(player)
+        case .Dash: handle_player_dash(player)
+    }
+
+   // else if is_input_pressed(action_inputs[.Grow]) {
+   //     for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+   //         if area.has_player {
+   //             box_set_size(&area, area.tile_size + { 1, 1 }, player.kinematic_body.box.rectangle)
+   //         }
+   //     }
+   // }
+}
+
+handle_player_idle :: proc(player: ^Player) {
+    mv_dir : [2]int
     has_mv_event : bool
     for i in dir_inputs {
         if is_input_down(i) {
@@ -205,23 +272,57 @@ handle_player_input :: proc(dt: f32) {
         player.kinematic_body.vel = 0
     }
 
+    if is_input_down(action_inputs[.Dash]) {
+        player.state = .Dash
+        target_vel := arr_cast(player.last_dir_input.dir, f32) * player.speed * DASH_MULTIPLIER
+        player.kinematic_body.vel = target_vel
+        create_player_after_image()
+        start_timer(&game_ctx.timers[.After_Image])
+    }
+
     if is_input_pressed(action_inputs[.Shrink]) {
+        shake_cam(SLAM_KICK_SHAKE)
         for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
             if area.has_player {
                 shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
             }
         }
-    } else if is_input_pressed(action_inputs[.Grow]) {
-        for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
+    } 
+}
+
+handle_player_dash :: proc(player: ^Player) {
+    if is_input_down(action_inputs[.Shrink]) {
+        player.state = .Idle
+        player.kinematic_body.vel = 0
+        shake_cam(SLAM_KICK_SHAKE * 2.0)
+        for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
             if area.has_player {
-                box_set_size(&area, area.tile_size + { 1, 1 }, player.kinematic_body.box.rectangle)
+                shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
             }
         }
+    } else if vec_comp_in_range(la.abs(player.kinematic_body.vel), DASH_FALL_OFF) {
+        player.state = .Idle
     }
 }
 
+start_timer :: proc(timer: ^Timer) {
+    timer.time_left = timer.duration
+    timer.running = true
+}
+
+create_player_after_image :: proc() {
+    after_image := ColorRender { render = game_ctx.player.render, fcolor = { 255.0, 255.0, 255.0, 255.0 } }
+    sa.append(&game_ctx.player.after_images, after_image)
+}
+
+vec_comp_in_range :: proc(a, b : [2]$T) -> bool {
+    return a.x < b.x && a.y < b.y
+}
+
 physics_update :: proc (dt: f32) {
-    game_ctx.player.kinematic_body.prev_pos = game_ctx.player.kinematic_body.box.rectangle.xy
+    player := &game_ctx.player
+    player.kinematic_body.prev_pos = player.kinematic_body.box.rectangle.xy
+    player.kinematic_body.vel = la.lerp(player.kinematic_body.vel, [2]f32{}, 12.0 * dt)
     move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
     sa.clear(&game_ctx.player.box_states)
     for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
@@ -245,6 +346,14 @@ physics_update :: proc (dt: f32) {
         kb.vel = la.lerp(kb.vel, [2]f32{}, 12.0 * dt)
         if abs(kb.vel.x) < 0.05 && abs(kb.vel.y) < 0.05 do kb.vel = {}
         move_kinematic_body(&kb, game_ctx.collision_ctx, dt)
+    }
+
+    for &enemy in game_ctx.enemies.active {
+        if enemy.state == .Dead do continue
+        enemy.kb.prev_pos = enemy.kb.box.rectangle.xy
+        enemy.kb.vel = la.lerp(enemy.kb.vel, [2]f32{}, 12.0 * dt)
+        if vec_comp_in_range(la.abs(enemy.kb.vel), [2]f32{ 0.05, 0.05 }) do enemy.kb.vel = {}
+        enemy_move_kinematic_body(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
     }
 }
 

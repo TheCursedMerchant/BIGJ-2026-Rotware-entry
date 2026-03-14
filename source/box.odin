@@ -119,22 +119,32 @@ box_resize :: proc(box: ^Box, amount: f32) {
 
 
 box_set_size :: proc {
-    box_set_size_player,
+    box_set_size_unsafe,
     box_set_size_kb,
 }
 
 box_set_size_kb :: proc(box: ^Box, size : [2]int, player_rect : Rectangle, k_bodies : []KinematicBody) {
-    if size == {1, 1} {
+    if size == { 1, 1 } {
         for kb in k_bodies {
             if rectangle_overlap(kb.box.rectangle, box.preview_rect) {
                 return
             }
         }
+
+        player_in_min_size := box.has_player && rectangle_overlap(box.preview_rect, player_rect)
+        if player_in_min_size do return
+
+        for &e, idx in game_ctx.enemies.active {
+            if rectangle_overlap(e.kb.box.rectangle, box.rectangle){
+                kill_enemy(idx, game_ctx.enemies)
+            }
+        }
     }
-    box_set_size_player(box, size, player_rect)
+
+    box_set_size_unsafe(box, size, player_rect)
 }
 
-box_set_size_player :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
+box_set_size_unsafe :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
     size := size
     size.x = la.max(size.x, 1)
     size.y = la.max(size.y, 1)
@@ -145,9 +155,8 @@ box_set_size_player :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
     new_size := arr_cast(size * NATIVE_TILE_DIM, f32)
     new_rect.zw = new_size
     new_rect.xy += orig_center_offset - (new_size / 2)
-    
-    player_in_min_size := box.has_player && size == {1, 1} && rectangle_overlap(new_rect, player_rect)
-    if size_diff == 0 || player_in_min_size do return
+
+    if size_diff == 0 do return
 
     box.tile_size = size
     box.rectangle = new_rect
