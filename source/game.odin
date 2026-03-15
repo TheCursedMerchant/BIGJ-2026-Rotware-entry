@@ -68,6 +68,7 @@ Player :: struct {
 Stomp :: struct {
     hitbox      : HitBoxRender,
     force       : f32,
+    stun        : f32,
     damage      : f32,
 }
 
@@ -204,6 +205,7 @@ init_player :: proc() {
         stomp = {
             damage = 1.0,
             force = 20.0,
+            stun = 0.2,
             hitbox = { rect = { 0, 0, 48, 48 }, color = WHITE },
         }
     }
@@ -315,11 +317,11 @@ handle_player_idle :: proc(player: ^Player) {
         create_player_after_image()
         start_timer(&game_ctx.timers[.After_Image])
     } else if is_input_pressed(action_inputs[.Stomp]) {
-        slam(player)
+        stomp(player)
     }
 }
 
-slam :: proc (player: ^Player) {
+stomp :: proc (player: ^Player) {
     shake_cam(SLAM_KICK_SHAKE)
     player_center := get_rect_center(player.kinematic_body.box.rectangle)
     stomp_center_offset := player.stomp.hitbox.rect.zw / 2
@@ -337,6 +339,7 @@ slam :: proc (player: ^Player) {
             kb.box.active_dam = player.stomp.damage
             kb.vel = kick_dir * player.stomp.force
             kb.box.state = .Active
+            kb.box.color = kb.box.colors[.Secondary]
         }
     }
     
@@ -345,13 +348,18 @@ slam :: proc (player: ^Player) {
             shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
         }
     }
+
+    // Stun kicked enemies
+    for &enemy in game_ctx.enemies.active[:] {
+        enemy.attack_timer += player.stomp.stun
+    }
 }
 
 handle_player_dash :: proc(player: ^Player) {
     if is_input_down(action_inputs[.Stomp]) {
         player.state = .Idle
         player.kinematic_body.vel = 0
-        slam(player)
+        stomp(player)
     } else if vec_comp_in_range(la.abs(player.kinematic_body.vel), DASH_FALL_OFF) {
         player.state = .Idle
     }
@@ -397,6 +405,7 @@ physics_update :: proc (dt: f32) {
         if abs(kb.vel.x) < 0.05 && abs(kb.vel.y) < 0.05 { 
             kb.vel = {}
             kb.box.state = .None
+            kb.box.color = kb.box.colors[.Primary]
         }
         switch kb.box.state {
             case .None : move_and_collide_kbs(&kb, game_ctx.collision_ctx, dt)
