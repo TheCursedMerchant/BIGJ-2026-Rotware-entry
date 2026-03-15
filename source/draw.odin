@@ -31,6 +31,11 @@ paint_lvl_texture :: proc(dt: f32) {
                 draw_pixel_perfect_render(tile.render)
             }
         }
+
+        //Draw AOE Boxes
+        for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
+            draw_hitbox_pattern(&pattern)
+        }
         
         // Draw Collision Bodies
         for body in sa.slice(&game_ctx.collision_ctx.static) { box_draw(body) }

@@ -51,6 +51,7 @@ move_attack_player :: proc(enemy : ^Enemy) {
             enemy.attack_box.current_color = enemy.attack_box.color
             if rectangle_overlap(enemy.attack_box.rect, player_rect) {
                 log.debugf("Damage dealt!", enemy.damage)
+                shake_cam(20.0)
             }
         }
     } else {
@@ -75,7 +76,7 @@ basic_enemy_at_pos :: proc(pos : [2]int) -> Enemy {
         health = 1.0,
         damage = 1.0,
         attack_range = 24.0,
-        attack_rate = 1.0,
+        attack_rate = 2.0,
         speed = 4.0,
     }
 }

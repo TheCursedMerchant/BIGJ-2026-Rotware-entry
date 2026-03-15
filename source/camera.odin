@@ -87,7 +87,7 @@ update_shake_pos :: proc(shake: ^Shake, pos: [2]f32) -> [2]f32 {
 		shake.intensity = 0
 		shake.active = false
 	}
-	return final_pos
+	return la.floor(final_pos)
 }
 
 shake_cam :: proc (intensity : f32) {

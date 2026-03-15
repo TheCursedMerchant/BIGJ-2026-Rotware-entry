@@ -4,6 +4,7 @@ import rl "vendor:raylib"
 import "core:log"
 import "core:c"
 import la "core:math/linalg"
+import "core:math/rand"
 import sa "core:container/small_array"
 import "core:mem"
 
@@ -36,12 +37,13 @@ Context :: struct {
     camera                  : FollowCamera,
     update_timer            : f32,
     res_scale_factor        : f32,
+    pattern_master          : ^HitboxPatternMaster,
     enemies                 : ^EnemyData,
     level                   : ^Level,
     collision_ctx           : ^CollisionContext,
 }
 
-TimerTag :: enum { After_Image }
+TimerTag :: enum { After_Image, Player_Dash, Player_Stomp, Spawn_Pattern }
 Timer :: struct {
     time_left   : f32,
     duration    : f32,
@@ -60,9 +62,11 @@ Player :: struct {
     render_color    : [4]f32,
     prev_dir        : [2]int,
     speed           : f32,
+    dash_speed      : f32,
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
     state           : PlayerState,
     stomp           : Stomp,
+    health          : f32,
 }
 
 Stomp :: struct {
@@ -149,8 +153,12 @@ init_game_ctx :: proc() {
     game_ctx.enemies = new(EnemyData, main_allocator)
     game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
     game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
-    add_test_data(game_ctx.collision_ctx)
+    game_ctx.pattern_master = new(HitboxPatternMaster, main_allocator)
     game_ctx.timers[.After_Image] = { duration = 0.064 }
+    game_ctx.timers[.Player_Dash] = { duration = 1.0 }
+    game_ctx.timers[.Player_Stomp] = { duration = 1.0 }
+    game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
+    add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
 }
 
 calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
@@ -159,7 +167,7 @@ calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
 }
 
 // NOTE: For testing only
-add_test_data :: proc(ctx: ^CollisionContext) {
+add_test_data :: proc(ctx: ^CollisionContext, pm : ^HitboxPatternMaster) {
     f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
     test_box := box_create_tile_size(pos = {8, 8}, tile_size = [2]int{4, 4},thick = 1.0)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
@@ -171,13 +179,18 @@ add_test_data :: proc(ctx: ^CollisionContext) {
     test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
 
-   add_enemy(basic_enemy_at_pos({ 1, 1 }), game_ctx.enemies)
-   add_enemy(basic_enemy_at_pos({ 1, 2 }), game_ctx.enemies)
-   add_enemy(basic_enemy_at_pos({ 1, 3 }), game_ctx.enemies)
-   add_enemy(basic_enemy_at_pos({ 1, 4 }), game_ctx.enemies)
-   add_enemy(basic_enemy_at_pos({ 1, 5 }), game_ctx.enemies)
-   add_enemy(basic_enemy_at_pos({ 1, 6 }), game_ctx.enemies)
-   add_enemy(basic_enemy_at_pos({ 1, 7 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 1 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 2 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 3 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 4 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 5 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 6 }), game_ctx.enemies)
+//    add_enemy(basic_enemy_at_pos({ 1, 7 }), game_ctx.enemies)
+
+    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, duration = 1.0)
+    sa.append(&pm.patterns, single_hitbox)
+
+    start_timer(&game_ctx.timers[.Spawn_Pattern])
 }
 
 init_player :: proc() {
@@ -232,23 +245,18 @@ reset_level :: proc () {
     game_ctx.enemies = new(EnemyData, main_allocator)
     game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
     game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
-    add_test_data(game_ctx.collision_ctx)
+    game_ctx.pattern_master = new(HitboxPatternMaster)
+    add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
 }
 
 update :: proc() {
     if rl.IsKeyPressed(.R) { reset_level() }
     dt := rl.GetFrameTime()
     game_ctx.update_timer += dt
-    after_image_t := &game_ctx.timers[.After_Image] 
-    if after_image_t.running {
-        after_image_t.time_left -= dt
-        if after_image_t.time_left <= 0 {
-            after_image_t.running = false
-            if game_ctx.player.state == .Dash {
-                create_player_after_image()
-                start_timer(after_image_t)
-            }
-        }
+    
+    update_global_timers(dt)
+    for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
+        update_hitbox_pattern_timers(&pattern, dt)
     }
 
     // TODO: Remove testing only
@@ -275,6 +283,33 @@ update :: proc() {
     update_camera(interpolated_dt)
     draw_frame(interpolated_dt)
 	free_all(context.temp_allocator)
+}
+
+update_global_timers :: proc(dt: f32) {
+    complete_timers : sa.Small_Array(16, TimerTag)
+    for &timer, idx in game_ctx.timers { 
+        if update_timer(&timer, dt) do sa.append(&complete_timers, TimerTag(idx))
+    }
+
+    for tag in sa.slice(&complete_timers) {
+        switch tag {
+            case .After_Image:
+                if game_ctx.player.state == .Dash {
+                    create_player_after_image()
+                    start_timer(&game_ctx.timers[.After_Image])
+                }
+            case .Spawn_Pattern:
+                log.debug("Spawining pattern....")
+                new_pos : [2]f32
+                for pattern in sa.slice(&game_ctx.pattern_master.patterns) {
+                    new_pos.x = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.x * NATIVE_TILE_DIM.x))
+                    new_pos.y = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.y * NATIVE_TILE_DIM.y))
+                    spawn_hitbox_pattern_at_pos(&game_ctx.pattern_master.patterns.data[0], new_pos)
+                }
+            case .Player_Dash: // Noop
+            case .Player_Stomp: // Noop
+        }
+    }
 }
 
 handle_player_input :: proc(dt: f32) {
@@ -310,13 +345,17 @@ handle_player_idle :: proc(player: ^Player) {
         player.kinematic_body.vel = 0
     }
 
-    if is_input_pressed(action_inputs[.Dash]) {
+    dash_available := !game_ctx.timers[.Player_Dash].running
+    stomp_available := !game_ctx.timers[.Player_Stomp].running
+
+    if dash_available && is_input_pressed(action_inputs[.Dash]) {
         player.state = .Dash
-        target_vel := arr_cast(player.last_dir_input.dir, f32) * player.speed * DASH_MULTIPLIER
+        target_vel := arr_cast(mv_dir, f32) * player.speed * DASH_MULTIPLIER
         player.kinematic_body.vel = target_vel
         create_player_after_image()
         start_timer(&game_ctx.timers[.After_Image])
-    } else if is_input_pressed(action_inputs[.Stomp]) {
+        start_timer(&game_ctx.timers[.Player_Dash])
+    } else if stomp_available && is_input_pressed(action_inputs[.Stomp]) {
         stomp(player)
     }
 }
@@ -353,6 +392,8 @@ stomp :: proc (player: ^Player) {
     for &enemy in game_ctx.enemies.active[:] {
         enemy.attack_timer += player.stomp.stun
     }
+
+    start_timer(&game_ctx.timers[.Player_Stomp])
 }
 
 handle_player_dash :: proc(player: ^Player) {
@@ -370,6 +411,16 @@ start_timer :: proc(timer: ^Timer) {
     timer.running = true
 }
 
+update_timer :: proc(timer: ^Timer, dt: f32) -> (complete: bool) {
+    if !timer.running do return false
+    timer.time_left -= dt
+    if timer.time_left <= 0 {
+        timer.running = false
+        return true
+    }
+    return false
+}
+
 create_player_after_image :: proc() {
     after_image := ColorRender { render = game_ctx.player.render, fcolor = { 255.0, 255.0, 255.0, 255.0 } }
     sa.append(&game_ctx.player.after_images, after_image)
@@ -383,7 +434,7 @@ physics_update :: proc (dt: f32) {
     player := &game_ctx.player
     player.kinematic_body.prev_pos = player.kinematic_body.box.rectangle.xy
     player.kinematic_body.vel = la.lerp(player.kinematic_body.vel, [2]f32{}, 12.0 * dt)
-    move_and_collide_kbs(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
+    move_player(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
     sa.clear(&game_ctx.player.box_states)
     for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
         area.color = area.colors[.Primary]
@@ -408,8 +459,8 @@ physics_update :: proc (dt: f32) {
             kb.box.color = kb.box.colors[.Primary]
         }
         switch kb.box.state {
-            case .None : move_and_collide_kbs(&kb, game_ctx.collision_ctx, dt)
-            case .Active : move_and_collide_kbs_enemies(&kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
+            case .None : move_kickbox(&kb, game_ctx.collision_ctx, dt)
+            case .Active : move_active_kickbox(&kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
         }
     }
 
@@ -419,7 +470,7 @@ physics_update :: proc (dt: f32) {
         enemy.kb.vel = la.lerp(enemy.kb.vel, [2]f32{}, 12.0 * dt)
         if abs(enemy.kb.vel.x) < 0.05 && abs(enemy.kb.vel.y) < 0.05 do enemy.kb.vel = {}
         //if vec_comp_in_range(la.abs(enemy.kb.vel), [2]f32{ 0.05, 0.05 }) do enemy.kb.vel = {}
-        move_and_collide_enemies(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
+        move_enemy(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
     }
 }
 
