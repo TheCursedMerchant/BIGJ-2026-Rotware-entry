@@ -34,7 +34,6 @@ hitbox_pattern_single :: proc(render : HitBoxRender, damage : f32 = 1.0, duratio
 spawn_hitbox_pattern_at_pos :: proc(pattern: ^HitboxPattern, pos : [2]f32) {
     for &box in sa.slice(&pattern.hitboxes) {
         box.render.rect.xy = pos + box.rel_pos
-        box.render.rect.xy -= get_rect_center(box.render.rect)
         box.render.current_color = box.render.color
         start_timer(&box.timer)
         pattern.running_boxes += 1

@@ -299,11 +299,11 @@ update_global_timers :: proc(dt: f32) {
                     start_timer(&game_ctx.timers[.After_Image])
                 }
             case .Spawn_Pattern:
-                log.debug("Spawining pattern....")
                 new_pos : [2]f32
                 for pattern in sa.slice(&game_ctx.pattern_master.patterns) {
                     new_pos.x = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.x * NATIVE_TILE_DIM.x))
                     new_pos.y = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.y * NATIVE_TILE_DIM.y))
+                    log.debugf("Spawining pattern at pos : %v", new_pos)
                     spawn_hitbox_pattern_at_pos(&game_ctx.pattern_master.patterns.data[0], new_pos)
                 }
             case .Player_Dash: // Noop
