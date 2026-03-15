@@ -28,7 +28,7 @@ LevelId :: enum {
 }
 
 Level :: struct {
-    tiles               : [SCENE_LEVEL_DIM.x][SCENE_LEVEL_DIM.y]Tile,
+    tiles               : [dynamic][dynamic]Tile,
     player_start_pos    : [2]f32,
 }
 
@@ -54,7 +54,10 @@ load_level_data :: proc(lvl : ^SceneSave, id: LevelId) {
 }
 
 build_level_from_save :: proc(lvl: ^SceneSave) -> Level {
-    out : Level
+    out := Level { tiles = make([dynamic][dynamic]Tile, SCENE_LEVEL_DIM.x) }
+    for &tiles in out.tiles {
+        tiles = make([dynamic]Tile, SCENE_LEVEL_DIM.y)
+    }
     n_tile : ^Tile
     draw_pos : [2]f32
     for cells, x in lvl.cells {

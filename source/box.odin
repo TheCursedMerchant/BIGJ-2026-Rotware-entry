@@ -27,8 +27,7 @@ TILE_UNIT_RECT :: Rectangle{0, 0, f32(NATIVE_TILE_DIM.x), f32(NATIVE_TILE_DIM.y)
 
 Box_State :: enum u8 {
     None,
-    Man,
-    Woman,
+    Active,
 }
 
 // Structs
@@ -39,6 +38,7 @@ BoxColor :: enum { Primary, Secondary }
 
 Box :: struct {
     colors          : [BoxColor]rl.Color,
+    explode_rect    : Rectangle,
     rectangle       : Rectangle,
     preview_rect    : Rectangle,
     preview_color   : rl.Color,
@@ -48,7 +48,7 @@ Box :: struct {
     creator_idx     : int,
     line_thickness  : f32,
     state           : Box_State,
-    has_player      : b8,
+    active_dam      : f32,
 }
 
 Key_Value :: struct($T: typeid, $E: typeid) {
@@ -89,6 +89,7 @@ box_create_tile_size :: proc(
 box_create :: proc(rect: Rectangle, thick: f32, colors: [BoxColor]rl.Color, state: Box_State) -> (box: Box) {
     assert(rectangle_validity_check(rect)); assert(thick >= 0)
     box.rectangle = rect
+    box.explode_rect = rect
     box.line_thickness = thick
     box.colors = colors
     box.color = box.colors[.Primary]
@@ -119,22 +120,32 @@ box_resize :: proc(box: ^Box, amount: f32) {
 
 
 box_set_size :: proc {
-    box_set_size_player,
+    box_set_size_unsafe,
     box_set_size_kb,
 }
 
 box_set_size_kb :: proc(box: ^Box, size : [2]int, player_rect : Rectangle, k_bodies : []KinematicBody) {
-    if size == {1, 1} {
+    if size == { 1, 1 } {
         for kb in k_bodies {
             if rectangle_overlap(kb.box.rectangle, box.preview_rect) {
                 return
             }
         }
+
+        player_in_min_size := rectangle_overlap(box.preview_rect, player_rect)
+        if player_in_min_size do return
+
+        for &e, idx in game_ctx.enemies.active {
+            if rectangle_overlap(e.kb.box.rectangle, box.rectangle){
+                kill_enemy(idx, game_ctx.enemies)
+            }
+        }
     }
-    box_set_size_player(box, size, player_rect)
+
+    box_set_size_unsafe(box, size, player_rect)
 }
 
-box_set_size_player :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
+box_set_size_unsafe :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
     size := size
     size.x = la.max(size.x, 1)
     size.y = la.max(size.y, 1)
@@ -145,9 +156,8 @@ box_set_size_player :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
     new_size := arr_cast(size * NATIVE_TILE_DIM, f32)
     new_rect.zw = new_size
     new_rect.xy += orig_center_offset - (new_size / 2)
-    
-    player_in_min_size := box.has_player && size == {1, 1} && rectangle_overlap(new_rect, player_rect)
-    if size_diff == 0 || player_in_min_size do return
+
+    if size_diff == 0 do return
 
     box.tile_size = size
     box.rectangle = new_rect
@@ -174,7 +184,6 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
         box.rectangle = {}
         box.preview_rect = {}
         box.preview_color = {}
-        box.has_player = false
     }
 }
 
