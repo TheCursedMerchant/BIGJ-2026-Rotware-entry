@@ -348,7 +348,7 @@ handle_player_idle :: proc(player: ^Player) {
     dash_available := !game_ctx.timers[.Player_Dash].running
     stomp_available := !game_ctx.timers[.Player_Stomp].running
 
-    if dash_available && is_input_pressed(action_inputs[.Dash]) {
+    if has_mv_event && dash_available && is_input_pressed(action_inputs[.Dash]) {
         player.state = .Dash
         target_vel := arr_cast(mv_dir, f32) * player.speed * DASH_MULTIPLIER
         player.kinematic_body.vel = target_vel
