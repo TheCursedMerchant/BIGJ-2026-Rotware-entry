@@ -4,12 +4,14 @@ import la "core:math/linalg"
 import rl "vendor:raylib"
 import "core:log"
 
+RED :: [4]f32 { 255, 0, 0, 255 }
+WHITE :: [4]f32 { 255, 255, 255, 255 }
+
 EnemyState :: enum { Chase, Dead }
 
 Enemy :: struct {
     kb              : KinematicBody,
-    hit_rect        : Rectangle,
-    render          : Render,
+    attack_box      : HitBoxRender,
     speed           : f32,
     health          : f32,
     damage          : f32,
@@ -17,6 +19,12 @@ Enemy :: struct {
     attack_rate     : f32,
     attack_timer    : f32,
     state           : EnemyState,
+}
+
+HitBoxRender :: struct {
+    rect            : Rectangle,
+    current_color   : [4]f32,
+    color           : [4]f32,
 }
 
 EnemyData :: struct {
@@ -39,8 +47,9 @@ move_attack_player :: proc(enemy : ^Enemy) {
         enemy.kb.vel = {}
         if enemy.attack_timer <= 0 {
             enemy.attack_timer = enemy.attack_rate
-            enemy.hit_rect.xy = enemy_center + (dir_to_player * enemy.attack_range)
-            if rectangle_overlap(enemy.hit_rect, player_rect) {
+            enemy.attack_box.rect.xy = (player_rect.xy - (player_rect.zw / 2))
+            enemy.attack_box.current_color = enemy.attack_box.color
+            if rectangle_overlap(enemy.attack_box.rect, player_rect) {
                 log.debugf("Damage dealt!", enemy.damage)
             }
         }
@@ -61,12 +70,12 @@ basic_enemy_at_pos :: proc(pos : [2]int) -> Enemy {
                 line_thickness = 1.0,
             },
         },
-        hit_rect = { 0, 0, 16, 16 },
-        render = { anim = create_atlas_anim(.Player_Idle_Down), pos = raw_pos },
+        attack_box = { rect = { 0, 0, 16, 16 }, color = RED, current_color = RED },
+        //render = { anim = create_atlas_anim(.Player_Idle_Down), pos = raw_pos },
         health = 1.0,
         damage = 1.0,
-        attack_range = 32.0,
-        attack_rate = 0.5,
+        attack_range = 24.0,
+        attack_rate = 1.0,
         speed = 4.0,
     }
 }

@@ -158,13 +158,12 @@ move_kinematic_body :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f3
     solids := sa.slice(&ctx.static)
     k_bodies := sa.slice(&ctx.kick_boxes)
     collider_idxs : sa.Small_Array(16, int)
-    mv_dir := la.normalize(kb.vel)
+    origin_vel := kb.vel
     move_axis(kb, &collider_idxs, solids, k_bodies, { 1.0, 0.0 })
     move_axis(kb, &collider_idxs, solids, k_bodies, { 0.0, 1.0 })
     target_vel : [2]f32
     for idx in sa.slice(&collider_idxs) {
-        target_vel = mv_dir * BOX_SPEED
-        ctx.kick_boxes.data[idx].vel = target_vel
+        ctx.kick_boxes.data[idx].vel = origin_vel * 1.5
     }
 }
 

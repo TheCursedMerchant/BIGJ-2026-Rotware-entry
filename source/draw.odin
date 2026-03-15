@@ -27,12 +27,8 @@ paint_lvl_texture :: proc(dt: f32) {
         player := &game_ctx.player
         // Draw Tiles
         for tiles, x in game_ctx.level.tiles {
-            for tile, y in tiles {
-                if x == 12 && y == 12 {
-                    draw_pixel_perfect_render(tile.render, rl.RED)
-                } else {
-                    draw_pixel_perfect_render(tile.render)
-                }
+            for tile in tiles {
+                draw_pixel_perfect_render(tile.render)
             }
         }
         
@@ -46,9 +42,11 @@ paint_lvl_texture :: proc(dt: f32) {
         }
 
         //Draw Enemies
-        for enemy in game_ctx.enemies.active {
+        for &enemy in game_ctx.enemies.active {
             kb_draw_pos = interpolate_pos(enemy.kb.prev_pos, enemy.kb.box.rectangle.xy, dt)
-            box_draw_at_pos(enemy.kb.box, kb_draw_pos) 
+            box_draw_at_pos(enemy.kb.box, kb_draw_pos)
+            rl.DrawRectangleRec(rect_to_rectangle(enemy.attack_box.rect), fcolor_to_color(enemy.attack_box.current_color))
+            enemy.attack_box.current_color = fade_color(enemy.attack_box.current_color, 20.0)
         }
 
         // Draw Ents/Player
@@ -64,12 +62,15 @@ paint_lvl_texture :: proc(dt: f32) {
 }
 
 draw_fade_render :: proc(render: ^ColorRender, fade_amount : f32) {
-    render.fcolor.a = la.max(render.fcolor.a - fade_amount, 0)
+    render.fcolor = fade_color(render.fcolor, fade_amount)
     render.fcolor.rg -= { fade_amount, fade_amount }
     tint := rl.WHITE
-    tint.a = u8(render.fcolor.a)
-    tint.rg = arr_cast(render.fcolor.rg, u8)
+    tint.rga = arr_cast(render.fcolor.rga, u8)
     draw_pixel_perfect_render(render.render, tint)
+}
+
+fade_color :: proc(fcolor : [4]f32, amount : f32) -> [4]f32 {
+    return la.max(fcolor.a - amount, 0)
 }
 
 draw_pixel_perfect_render :: proc(render: Render, tint: rl.Color = rl.WHITE) {
@@ -104,4 +105,10 @@ get_render_center :: proc(render: Render) -> [2]f32 {
     anim_texture := anim_atlas_texture(render.anim)
     half_dim := [2]f32{ anim_texture.rect.width, anim_texture.rect.height } / 2.0 
     return render.pos + render.offset + half_dim + { anim_texture.offset_left, anim_texture.offset_top }
+}
+
+fcolor_to_color :: proc(fcolor : [4]f32) -> rl.Color {
+    color : rl.Color
+    color.rgba = arr_cast(fcolor, u8).rgba
+    return color
 }

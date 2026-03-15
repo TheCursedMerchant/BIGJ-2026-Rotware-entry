@@ -269,14 +269,6 @@ handle_player_input :: proc(dt: f32) {
         case .Idle: handle_player_idle(player)
         case .Dash: handle_player_dash(player)
     }
-
-   // else if is_input_pressed(action_inputs[.Grow]) {
-   //     for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
-   //         if area.has_player {
-   //             box_set_size(&area, area.tile_size + { 1, 1 }, player.kinematic_body.box.rectangle)
-   //         }
-   //     }
-   // }
 }
 
 handle_player_idle :: proc(player: ^Player) {
