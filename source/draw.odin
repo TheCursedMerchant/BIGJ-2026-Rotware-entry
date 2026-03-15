@@ -54,6 +54,8 @@ paint_lvl_texture :: proc(dt: f32) {
             draw_fade_render(&render, 20.0) 
             if render.fcolor.a == 0 { sa.unordered_remove(&player.after_images, idx) }
         }
+        rl.DrawRectangleRec(rect_to_rectangle(player.stomp.hitbox.rect), fcolor_to_color(player.stomp.hitbox.current_color))
+        player.stomp.hitbox.current_color = fade_color(player.stomp.hitbox.current_color, 20.0)
         player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box

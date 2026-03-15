@@ -70,7 +70,7 @@ basic_enemy_at_pos :: proc(pos : [2]int) -> Enemy {
                 line_thickness = 1.0,
             },
         },
-        attack_box = { rect = { 0, 0, 16, 16 }, color = RED, current_color = RED },
+        attack_box = { rect = { 0, 0, 16, 16 }, color = RED },
         //render = { anim = create_atlas_anim(.Player_Idle_Down), pos = raw_pos },
         health = 1.0,
         damage = 1.0,

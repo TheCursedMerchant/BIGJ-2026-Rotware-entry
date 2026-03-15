@@ -62,6 +62,13 @@ Player :: struct {
     speed           : f32,
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
     state           : PlayerState,
+    stomp           : Stomp,
+}
+
+Stomp :: struct {
+    hitbox      : HitBoxRender,
+    force       : f32,
+    damage      : f32,
 }
 
 Render :: struct {
@@ -153,14 +160,14 @@ calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
 // NOTE: For testing only
 add_test_data :: proc(ctx: ^CollisionContext) {
     f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
-    test_box := box_create_tile_size(pos = {8, 8}, tile_size = [2]int{4, 4},thick = 1.0, state = .Man)
+    test_box := box_create_tile_size(pos = {8, 8}, tile_size = [2]int{4, 4},thick = 1.0)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0, state = .Woman)
+    test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
 
-    test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0, state = .Woman)
+    test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0, state = .Woman)
+    test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0)
     sa.append(&game_ctx.collision_ctx.box_areas, test_box)
 
    add_enemy(basic_enemy_at_pos({ 1, 1 }), game_ctx.enemies)
@@ -194,6 +201,11 @@ init_player :: proc() {
                 state = .None,
             },
         },
+        stomp = {
+            damage = 1.0,
+            force = 20.0,
+            hitbox = { rect = { 0, 0, 48, 48 }, color = WHITE },
+        }
     }
 }
 
@@ -296,34 +308,50 @@ handle_player_idle :: proc(player: ^Player) {
         player.kinematic_body.vel = 0
     }
 
-    if is_input_down(action_inputs[.Dash]) {
+    if is_input_pressed(action_inputs[.Dash]) {
         player.state = .Dash
         target_vel := arr_cast(player.last_dir_input.dir, f32) * player.speed * DASH_MULTIPLIER
         player.kinematic_body.vel = target_vel
         create_player_after_image()
         start_timer(&game_ctx.timers[.After_Image])
+    } else if is_input_pressed(action_inputs[.Stomp]) {
+        slam(player)
     }
+}
 
-    if is_input_pressed(action_inputs[.Shrink]) {
-        shake_cam(SLAM_KICK_SHAKE)
-        for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
-            if area.has_player {
-                shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
-            }
+slam :: proc (player: ^Player) {
+    shake_cam(SLAM_KICK_SHAKE)
+    player_center := get_rect_center(player.kinematic_body.box.rectangle)
+    stomp_center_offset := player.stomp.hitbox.rect.zw / 2
+    player.stomp.hitbox.rect.xy = player_center - stomp_center_offset
+    stomp_center := get_rect_center(player.stomp.hitbox.rect)
+    player.stomp.hitbox.current_color = player.stomp.hitbox.color
+    
+    // Slam Boxes away
+    kick_dir : [2]f32
+    kb_center : [2]f32
+    for &kb in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
+        if rectangle_overlap(player.stomp.hitbox.rect, kb.box.rectangle) {
+            kb_center = get_rect_center(kb.box.rectangle)
+            kick_dir = la.normalize(kb_center - stomp_center)
+            kb.box.active_dam = player.stomp.damage
+            kb.vel = kick_dir * player.stomp.force
+            kb.box.state = .Active
         }
-    } 
+    }
+    
+    for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
+        if rectangle_overlap(player.stomp.hitbox.rect, area.rectangle) {
+            shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
+        }
+    }
 }
 
 handle_player_dash :: proc(player: ^Player) {
-    if is_input_down(action_inputs[.Shrink]) {
+    if is_input_down(action_inputs[.Stomp]) {
         player.state = .Idle
         player.kinematic_body.vel = 0
-        shake_cam(SLAM_KICK_SHAKE * 2.0)
-        for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
-            if area.has_player {
-                shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
-            }
-        }
+        slam(player)
     } else if vec_comp_in_range(la.abs(player.kinematic_body.vel), DASH_FALL_OFF) {
         player.state = .Idle
     }
@@ -347,7 +375,7 @@ physics_update :: proc (dt: f32) {
     player := &game_ctx.player
     player.kinematic_body.prev_pos = player.kinematic_body.box.rectangle.xy
     player.kinematic_body.vel = la.lerp(player.kinematic_body.vel, [2]f32{}, 12.0 * dt)
-    move_kinematic_body(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
+    move_and_collide_kbs(&game_ctx.player.kinematic_body, game_ctx.collision_ctx, dt)
     sa.clear(&game_ctx.player.box_states)
     for &area in sa.slice(&game_ctx.collision_ctx.box_areas) {
         area.color = area.colors[.Primary]
@@ -368,8 +396,14 @@ physics_update :: proc (dt: f32) {
     for &kb in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
         kb.prev_pos = kb.box.rectangle.xy
         kb.vel = la.lerp(kb.vel, [2]f32{}, 12.0 * dt)
-        if abs(kb.vel.x) < 0.05 && abs(kb.vel.y) < 0.05 do kb.vel = {}
-        move_kinematic_body(&kb, game_ctx.collision_ctx, dt)
+        if abs(kb.vel.x) < 0.05 && abs(kb.vel.y) < 0.05 { 
+            kb.vel = {}
+            kb.box.state = .None
+        }
+        switch kb.box.state {
+            case .None : move_and_collide_kbs(&kb, game_ctx.collision_ctx, dt)
+            case .Active : move_and_collide_kbs_enemies(&kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
+        }
     }
 
     for &enemy in game_ctx.enemies.active {
@@ -378,7 +412,7 @@ physics_update :: proc (dt: f32) {
         enemy.kb.vel = la.lerp(enemy.kb.vel, [2]f32{}, 12.0 * dt)
         if abs(enemy.kb.vel.x) < 0.05 && abs(enemy.kb.vel.y) < 0.05 do enemy.kb.vel = {}
         //if vec_comp_in_range(la.abs(enemy.kb.vel), [2]f32{ 0.05, 0.05 }) do enemy.kb.vel = {}
-        enemy_move_kinematic_body(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
+        move_and_collide_enemies(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
     }
 }
 
@@ -446,6 +480,10 @@ arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
 
 box_to_rect :: proc(box: Box) -> rl.Rectangle {
     return rl.Rectangle{ box.rectangle.x, box.rectangle.y, box.rectangle.z, box.rectangle.w }
+}
+
+get_rect_center :: proc(rect: Rectangle) -> [2]f32 {
+    return rect.xy + (rect.zw / 2)
 }
 
 make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[]byte, size: uint) {

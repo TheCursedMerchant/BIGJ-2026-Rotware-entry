@@ -27,8 +27,7 @@ TILE_UNIT_RECT :: Rectangle{0, 0, f32(NATIVE_TILE_DIM.x), f32(NATIVE_TILE_DIM.y)
 
 Box_State :: enum u8 {
     None,
-    Man,
-    Woman,
+    Active,
 }
 
 // Structs
@@ -39,6 +38,7 @@ BoxColor :: enum { Primary, Secondary }
 
 Box :: struct {
     colors          : [BoxColor]rl.Color,
+    explode_rect    : Rectangle,
     rectangle       : Rectangle,
     preview_rect    : Rectangle,
     preview_color   : rl.Color,
@@ -48,6 +48,7 @@ Box :: struct {
     creator_idx     : int,
     line_thickness  : f32,
     state           : Box_State,
+    active_dam      : f32,
     has_player      : b8,
 }
 
@@ -89,6 +90,7 @@ box_create_tile_size :: proc(
 box_create :: proc(rect: Rectangle, thick: f32, colors: [BoxColor]rl.Color, state: Box_State) -> (box: Box) {
     assert(rectangle_validity_check(rect)); assert(thick >= 0)
     box.rectangle = rect
+    box.explode_rect = rect
     box.line_thickness = thick
     box.colors = colors
     box.color = box.colors[.Primary]
