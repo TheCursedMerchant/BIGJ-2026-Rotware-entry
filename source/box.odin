@@ -49,7 +49,6 @@ Box :: struct {
     line_thickness  : f32,
     state           : Box_State,
     active_dam      : f32,
-    has_player      : b8,
 }
 
 Key_Value :: struct($T: typeid, $E: typeid) {
@@ -133,7 +132,7 @@ box_set_size_kb :: proc(box: ^Box, size : [2]int, player_rect : Rectangle, k_bod
             }
         }
 
-        player_in_min_size := box.has_player && rectangle_overlap(box.preview_rect, player_rect)
+        player_in_min_size := rectangle_overlap(box.preview_rect, player_rect)
         if player_in_min_size do return
 
         for &e, idx in game_ctx.enemies.active {
@@ -185,7 +184,6 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
         box.rectangle = {}
         box.preview_rect = {}
         box.preview_color = {}
-        box.has_player = false
     }
 }
 

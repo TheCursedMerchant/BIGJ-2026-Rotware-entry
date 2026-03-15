@@ -381,10 +381,8 @@ physics_update :: proc (dt: f32) {
         area.color = area.colors[.Primary]
         area.preview_rect = {}
         area.preview_color.rgb = area.colors[.Primary].rgb
-        area.has_player = false
         if rectangle_overlap(game_ctx.player.kinematic_body.box.rectangle, area.rectangle) {
             area.color = area.colors[.Secondary]
-            area.has_player = true
             append_box_state(area, &game_ctx.player.box_states)
             set_box_preview_rect(&area)
             if rectangle_overlap(game_ctx.player.kinematic_body.box.rectangle, area.preview_rect) {
