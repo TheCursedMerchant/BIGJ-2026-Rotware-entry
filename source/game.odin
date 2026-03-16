@@ -163,12 +163,17 @@ init_game_ctx :: proc() {
     game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
     game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
     game_ctx.pattern_master = new(HitboxPatternMaster, main_allocator)
+    game_ctx.active_kbs = 0
+    init_global_timers()
+    add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
+}
+
+init_global_timers :: proc() {
     game_ctx.timers[.After_Image] = { duration = 0.064 }
     game_ctx.timers[.Player_Dash] = { duration = 1.0 }
     game_ctx.timers[.Player_Stomp] = { duration = 1.0 }
     game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
     game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
-    add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
 }
 
 calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
@@ -275,6 +280,8 @@ reset_level :: proc () {
     game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
     game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
     game_ctx.pattern_master = new(HitboxPatternMaster)
+    game_ctx.active_kbs = 0
+    init_global_timers()
     add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
 }
 
