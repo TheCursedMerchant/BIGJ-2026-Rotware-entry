@@ -43,7 +43,7 @@ Context :: struct {
     collision_ctx           : ^CollisionContext,
 }
 
-TimerTag :: enum { After_Image, Player_Dash, Player_Stomp, Spawn_Pattern }
+TimerTag :: enum { After_Image, Player_Dash, Player_Stomp, Spawn_Pattern, Spawn_Area }
 Timer :: struct {
     time_left   : f32,
     duration    : f32,
@@ -66,7 +66,16 @@ Player :: struct {
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
     state           : PlayerState,
     stomp           : Stomp,
+    spawner         : AreaSpawner,
     health          : f32,
+}
+
+AreaSpawner :: struct {
+    rect                : Rectangle,
+    next_area           : Box,
+    max_areas           : int,
+    max_size            : int,
+    ready               : bool,
 }
 
 Stomp :: struct {
@@ -158,6 +167,7 @@ init_game_ctx :: proc() {
     game_ctx.timers[.Player_Dash] = { duration = 1.0 }
     game_ctx.timers[.Player_Stomp] = { duration = 1.0 }
     game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
+    game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
     add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
 }
 
@@ -166,18 +176,33 @@ calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
     return {pos.x, pos.y, dim.x, dim.y }
 }
 
+spawn_random_area :: proc(spawner : ^AreaSpawner) {
+    if spawner.ready && game_ctx.collision_ctx.box_areas.len < spawner.max_areas {
+        spawner.ready = false
+        new_dim := rand.int_range(2, spawner.max_size)
+        spawner.rect.xy = game_ctx.player.kinematic_body.box.rectangle.xy
+        //spawner.rect.xy -= get_rect_center(spawner.rect)
+        new_x := int(rand.float32_range(spawner.rect.x, spawner.rect.x + spawner.rect.z)) % 16
+        new_y := int(rand.float32_range(spawner.rect.y, spawner.rect.y + spawner.rect.w)) % 16
+
+        spawner.next_area = box_create_tile_size(pos = { new_x, new_y }, tile_size = [2]int{ new_dim, new_dim }, thick = 1.0)
+        sa.append(&game_ctx.collision_ctx.box_areas, spawner.next_area)
+        start_timer(&game_ctx.timers[.Spawn_Area])
+    }
+}
+
 // NOTE: For testing only
 add_test_data :: proc(ctx: ^CollisionContext, pm : ^HitboxPatternMaster) {
-    f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
-    test_box := box_create_tile_size(pos = {8, 8}, tile_size = [2]int{4, 4},thick = 1.0)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-
-    test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-    test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0)
-    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+//    f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
+//      test_box := box_create_tile_size(pos = {16, 16}, tile_size = [2]int{4, 4},thick = 1.0)
+//      sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+//    test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0)
+//    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+//
+//    test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0)
+//    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
+//    test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0)
+//    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
 
 //    add_enemy(basic_enemy_at_pos({ 1, 1 }), game_ctx.enemies)
 //    add_enemy(basic_enemy_at_pos({ 1, 2 }), game_ctx.enemies)
@@ -191,6 +216,7 @@ add_test_data :: proc(ctx: ^CollisionContext, pm : ^HitboxPatternMaster) {
     sa.append(&pm.patterns, single_hitbox)
 
     start_timer(&game_ctx.timers[.Spawn_Pattern])
+    start_timer(&game_ctx.timers[.Spawn_Area])
 }
 
 init_player :: proc() {
@@ -220,6 +246,11 @@ init_player :: proc() {
             force = 20.0,
             stun = 0.2,
             hitbox = { rect = { 0, 0, 48, 48 }, color = WHITE },
+        },
+        spawner = {
+            max_areas = 4,
+            rect = { 0, 0, 128, 128 },
+            max_size = 6,
         }
     }
 }
@@ -275,6 +306,7 @@ update :: proc() {
             enemy.attack_timer -= FIXED_TIME_STEP
             run_state_basic(&enemy)
         }
+        spawn_random_area(&game_ctx.player.spawner)
         game_ctx.update_timer -= FIXED_TIME_STEP
         physics_update(FIXED_TIME_STEP)
     }
@@ -305,6 +337,11 @@ update_global_timers :: proc(dt: f32) {
                     new_pos.y = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.y * NATIVE_TILE_DIM.y))
                     log.debugf("Spawining pattern at pos : %v", new_pos)
                     spawn_hitbox_pattern_at_pos(&game_ctx.pattern_master.patterns.data[0], new_pos)
+                }
+            case .Spawn_Area:
+                spawner := &game_ctx.player.spawner
+                if game_ctx.collision_ctx.box_areas.len < spawner.max_areas { 
+                    spawner.ready = true
                 }
             case .Player_Dash: // Noop
             case .Player_Stomp: // Noop
