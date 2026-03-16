@@ -65,7 +65,7 @@ paint_lvl_texture :: proc(dt: f32) {
         player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
-//        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
+        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
     rl.EndMode2D()
 }
 

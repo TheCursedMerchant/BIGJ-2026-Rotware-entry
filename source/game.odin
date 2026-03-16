@@ -586,6 +586,11 @@ in_screen_bounds :: proc (pos: [2]f32) -> bool {
     return pos.x >= 0 && pos.x < f32(rl.GetScreenWidth()) && pos.y >= 0 && pos.y < f32(rl.GetScreenHeight())
 }
 
+pos_in_level_bounds :: proc(pos: [2]f32) -> bool {
+    level_bounds := NATIVE_TILE_DIM * SCENE_LEVEL_DIM
+    return pos.x >= 0 && pos.x <= f32(level_bounds.x) && pos.y >= 0 && pos.y <= f32(level_bounds.y)
+}
+
 arr_cast :: proc(arr: [$N]$T, $S : typeid) -> [N]S  {
     out : [N]S
     for val, idx in arr {

@@ -66,23 +66,28 @@ move_axis :: proc(
         test_rect := kb.box.rectangle
         for move != 0 {
             test_rect.xy += f32(sign) * axis_vec
-            for solid in solids {
-                if aabb_collision(test_rect, solid.rectangle) {
-                    has_collision = true
-                    break
-                }
-            }
 
-            for &k, idx in k_bodies { 
-                if aabb_collision(test_rect, k.box.rectangle) && (&k != kb) {
-                    has_collision = true
-                    sa.append(colliders, idx)
-                    break
+            if pos_in_level_bounds(test_rect.xy) && pos_in_level_bounds(test_rect.xy + test_rect.zw) {
+                for solid in solids {
+                    if aabb_collision(test_rect, solid.rectangle) {
+                        has_collision = true
+                        break
+                    }
                 }
-            }
 
-            if kb != &game_ctx.player.kinematic_body {
-                has_collision ||= aabb_collision(test_rect, game_ctx.player.kinematic_body.box.rectangle)
+                for &k, idx in k_bodies { 
+                    if aabb_collision(test_rect, k.box.rectangle) && (&k != kb) {
+                        has_collision = true
+                        sa.append(colliders, idx)
+                        break
+                    }
+                }
+
+                if kb != &game_ctx.player.kinematic_body {
+                    has_collision ||= aabb_collision(test_rect, game_ctx.player.kinematic_body.box.rectangle)
+                }
+            } else {
+                has_collision = true
             }
 
             if has_collision {
@@ -176,7 +181,6 @@ move_axis_kbs_enemies :: proc(
 
     remainder += vel
     move := la.floor(remainder)
-
     if (move != 0) {
         remainder -= f32(move)
         sign := la.sign(move)
@@ -184,31 +188,34 @@ move_axis_kbs_enemies :: proc(
         test_rect := kb.box.rectangle
         for move != 0 {
             test_rect.xy += f32(sign) * axis_vec
-            for solid in solids {
-                if aabb_collision(test_rect, solid.rectangle) {
-                    has_collision = true
-                    break
-                }
-            }
-
-            for &k, idx in k_bodies { 
-                if aabb_collision(test_rect, k.box.rectangle) && (&k != kb) {
-                    has_collision = true
-                    sa.append(kb_colliders, idx)
-                    break
-                }
-            }
-
-            has_collision ||= aabb_collision(test_rect, game_ctx.player.kinematic_body.box.rectangle)
-
-            for &e, idx in enemies {
-                if e.state != .Dead && (&e.kb != kb) {
-                    if aabb_collision(test_rect, e.kb.box.rectangle) {
-                        e.health -= kb.box.active_dam
-                        if e.health <= 0 do kill_enemy(idx, game_ctx.enemies)
-                        log.debugf("Enemy health after box : %v", e.health)
+            if pos_in_level_bounds(test_rect.xy) && pos_in_level_bounds(test_rect.xy + test_rect.zw) {
+                for solid in solids {
+                    if aabb_collision(test_rect, solid.rectangle) {
+                        has_collision = true
+                        break
                     }
                 }
+
+                for &k, idx in k_bodies { 
+                    if aabb_collision(test_rect, k.box.rectangle) && (&k != kb) {
+                        has_collision = true
+                        sa.append(kb_colliders, idx)
+                        break
+                    }
+                }
+
+                has_collision ||= aabb_collision(test_rect, game_ctx.player.kinematic_body.box.rectangle)
+                for &e, idx in enemies {
+                    if e.state != .Dead && (&e.kb != kb) {
+                        if aabb_collision(test_rect, e.kb.box.rectangle) {
+                            e.health -= kb.box.active_dam
+                            if e.health <= 0 do kill_enemy(idx, game_ctx.enemies)
+                            log.debugf("Enemy health after box : %v", e.health)
+                        }
+                    }
+                }
+            } else {
+                has_collision = true
             }
 
             if has_collision {
