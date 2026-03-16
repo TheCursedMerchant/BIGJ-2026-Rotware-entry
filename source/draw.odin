@@ -11,6 +11,7 @@ draw_frame :: proc(dt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
 	    rl.ClearBackground(rl.BLACK)
         paint_lvl_texture(dt)
+        rl.DrawText(rl.TextFormat("%i", rl.GetFPS()), 32, 32, 10.0, rl.WHITE)
     rl.EndTextureMode()
 
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }

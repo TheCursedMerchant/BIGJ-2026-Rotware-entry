@@ -15,6 +15,7 @@ KinematicBody :: struct {
     remainder       : [2]f32,
     vel             : [2]f32,
     prev_pos        : [2]f32,
+    timer           : Timer,
 }
 
 AxisVel :: struct {

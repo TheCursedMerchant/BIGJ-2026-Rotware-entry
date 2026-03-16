@@ -179,6 +179,7 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
                 creator_idx = box_idx
             },
             prev_pos = box.rectangle.xy,
+            timer = { duration = 2.0 }
         }
         sa.append(&ctx.kick_boxes, kick_box)
         box.rectangle = {}
