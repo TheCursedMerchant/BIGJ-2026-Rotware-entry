@@ -11,8 +11,9 @@ draw_frame :: proc(dt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
 	    rl.ClearBackground(rl.BLACK)
         paint_lvl_texture(dt)
-        rl.DrawText(rl.TextFormat("%i", rl.GetFPS()), 32, 32, 10.0, rl.WHITE)
-    rl.EndTextureMode()
+        rl.DrawText(rl.TextFormat("%i", rl.GetFPS()), 32, 16, 10.0, rl.WHITE)
+        draw_health_box(&game_ctx.player, dt) 
+        rl.EndTextureMode()
 
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
 	src_rect := rl.Rectangle{0, 0, f32(game_ctx.level_render.texture.width), f32(-game_ctx.level_render.texture.height)}
@@ -65,7 +66,7 @@ paint_lvl_texture :: proc(dt: f32) {
         player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
-        rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
+        //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
     rl.EndMode2D()
 }
 
@@ -103,6 +104,24 @@ draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atl
 		anim_texture.rect.height,
 	}
 	rl.DrawTexturePro(atlas, atlas_rect, dest, {}, 0, tint)
+}
+
+draw_health_box :: proc(player: ^Player, dt: f32) {
+    scale : f32 = 10.0
+    screen_dim := arr_cast([2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight()}, f32)
+    draw_pos := [2]f32{ 32, 32 } * game_ctx.res_scale_factor
+    bg_rect := Rectangle { draw_pos.x, draw_pos.y, player.max_health * scale, 4 }
+    bg_rect.zw *= game_ctx.res_scale_factor
+    if !game_ctx.timers[.Player_Damaged].running {
+        player.prev_health = la.lerp(player.prev_health, player.health, dt * 0.5)
+    }
+    mid_rect := Rectangle { draw_pos.x, draw_pos.y, player.prev_health * scale, 4 }
+    mid_rect.zw *= game_ctx.res_scale_factor
+    top_rect := Rectangle { draw_pos.x, draw_pos.y, player.health * scale, 4 }
+    top_rect.zw *= game_ctx.res_scale_factor
+    rl.DrawRectangleRec(rect_to_rectangle(bg_rect), rl.DARKGRAY)
+    rl.DrawRectangleRec(rect_to_rectangle(mid_rect), rl.RED)
+    rl.DrawRectangleRec(rect_to_rectangle(top_rect), rl.GREEN)
 }
 
 interpolate_pos :: proc(prev, current: [2]f32, dt : f32) -> [2]f32 {

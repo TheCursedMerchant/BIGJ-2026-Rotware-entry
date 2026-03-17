@@ -45,7 +45,7 @@ update_hitbox_pattern_timers :: proc(pattern: ^HitboxPattern, dt: f32) {
         if update_timer(&box.timer, dt) {
             box.timer.time_left = box.timer.duration
             if rectangle_overlap(box.render.rect, game_ctx.player.kinematic_body.box.rectangle) {
-                log.debugf("Damaging player : %v", pattern.damage)
+                damage_player(&game_ctx.player, pattern.damage)
             }
             pattern.running_boxes -= 1
             if pattern.running_boxes <= 0 {

@@ -45,7 +45,7 @@ Context :: struct {
     active_kbs              : int,
 }
 
-TimerTag :: enum { After_Image, Player_Dash, Player_Stomp, Spawn_Pattern, Spawn_Area }
+TimerTag :: enum { After_Image, Player_Dash, Player_Stomp, Spawn_Pattern, Spawn_Area, Player_Damaged }
 Timer :: struct {
     time_left   : f32,
     duration    : f32,
@@ -70,6 +70,8 @@ Player :: struct {
     stomp           : Stomp,
     spawner         : AreaSpawner,
     health          : f32,
+    prev_health     : f32,
+    max_health      : f32,
 }
 
 AreaSpawner :: struct {
@@ -174,6 +176,7 @@ init_global_timers :: proc() {
     game_ctx.timers[.Player_Stomp] = { duration = 1.0 }
     game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
     game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
+    game_ctx.timers[.Player_Damaged] = { duration = 1.0 }
 }
 
 calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
@@ -215,7 +218,7 @@ add_test_data :: proc(ctx: ^CollisionContext, pm : ^HitboxPatternMaster) {
     add_enemy(basic_enemy_at_pos({ 1, 6 }), game_ctx.enemies)
     add_enemy(basic_enemy_at_pos({ 1, 7 }), game_ctx.enemies)
 
-    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, duration = 1.0)
+    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
     sa.append(&pm.patterns, single_hitbox)
 
     start_timer(&game_ctx.timers[.Spawn_Pattern])
@@ -254,7 +257,9 @@ init_player :: proc() {
             max_areas = 4,
             rect = { 0, 0, 128, 128 },
             max_size = 6,
-        }
+        },
+        max_health = 10.0,
+        health = 10.0,
     }
 }
 
@@ -347,6 +352,7 @@ update_global_timers :: proc(dt: f32) {
             case .Spawn_Area:
                 spawner := &game_ctx.player.spawner
                 spawn_random_area(spawner)
+            case .Player_Damaged: // Noop
             case .Player_Dash: // Noop
             case .Player_Stomp: // Noop
         }
@@ -489,6 +495,14 @@ update_timer :: proc(timer: ^Timer, dt: f32) -> (complete: bool) {
 create_player_after_image :: proc() {
     after_image := ColorRender { render = game_ctx.player.render, fcolor = { 255.0, 255.0, 255.0, 255.0 } }
     sa.append(&game_ctx.player.after_images, after_image)
+}
+
+damage_player :: proc(player: ^Player, value : f32) {
+    player.prev_health = player.health
+    player.health -= value
+    if player.health <= 0 { log.debug("Player died!") }
+    shake_cam(32.0)
+    start_timer(&game_ctx.timers[.Player_Damaged])
 }
 
 vec_comp_in_range :: proc(a, b : [2]$T) -> bool {
