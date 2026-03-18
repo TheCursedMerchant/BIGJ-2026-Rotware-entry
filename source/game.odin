@@ -31,6 +31,7 @@ Camera :: rl.Camera2D
 
 Context :: struct {
     timers                  : [TimerTag]Timer,
+    explosion_rects         : sa.Small_Array(16, Explosion),
     level_render            : RenderTexture,
     atlas                   : Texture,
     font                    : Font,
@@ -44,6 +45,13 @@ Context :: struct {
     level                   : ^Level,
     collision_ctx           : ^CollisionContext,
     wave_spawner            : ^WaveSpawner,
+}
+
+Explosion :: struct {
+    timer   : Timer,
+    rect    : Rectangle,
+    color   : [4]f32,
+    damage  : f32,
 }
 
 TimerTag :: enum {
@@ -301,6 +309,7 @@ update :: proc() {
     }
 
     update_kickbox_timers(game_ctx.collision_ctx, &game_ctx.player, dt)
+    update_explosion_timers(dt)
 
     // TODO: Remove testing only
     if rl.IsKeyPressed(.N) {
@@ -324,7 +333,7 @@ update :: proc() {
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
     update_camera(interpolated_dt)
-    draw_frame(interpolated_dt)
+    draw_frame(interpolated_dt, dt)
 	free_all(context.temp_allocator)
 }
 
@@ -355,8 +364,6 @@ update_global_timers :: proc(dt: f32) {
             case .Spawn_Wave:
                 spawner := game_ctx.wave_spawner
                 if spawner.current_enemies + spawner.pack_size <= spawner.max_enemies {
-                    //spawn_wave(spawner, game_ctx.enemies)
-                    //start_timer(&game_ctx.timers[.Spawn_Wave])
                     start_timer(&game_ctx.timers[.Wave_Spawn_Enemy])
                 }
             case .Wave_Spawn_Enemy:
@@ -370,17 +377,40 @@ update_global_timers :: proc(dt: f32) {
 
 update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32) {
     free_kbs : sa.Small_Array(MAX_BOX_BODIES, int)
+    explosion := Explosion { timer = { duration = 0.2 } }
     for &kb, idx in sa.slice(&ctx.kick_boxes) {
         if update_timer(&kb.timer, dt) {
-            //TODO : Blowup
+            explosion.rect = kb.box.rectangle
+            explosion.rect.zw *= 5.0
+            explosion.rect.xy = get_rect_center(kb.box.rectangle) - (explosion.rect.zw / 2.0)
+            explosion.damage = kb.box.active_dam * 5
+            explosion.color = RED
+            start_timer(&explosion.timer)
+            sa.append(&game_ctx.explosion_rects, explosion)
             sa.append(&free_kbs, idx)
             update_active_kbs(-1)
         }
     }
 
     #reverse for i in sa.slice(&free_kbs) {
-        game_ctx.collision_ctx.kick_boxes.data[i] = {}
-        sa.unordered_remove(&game_ctx.collision_ctx.kick_boxes, i)
+        sa.unordered_remove(&ctx.kick_boxes, i)
+    }
+}
+
+update_explosion_timers :: proc(dt: f32) {
+    #reverse for &e, idx in sa.slice(&game_ctx.explosion_rects) {
+        if e.timer.running {
+            for &enemy, idx in game_ctx.enemies.active {
+                if enemy.state == .Dead do continue
+                if rectangle_overlap(e.rect, enemy.kb.box.rectangle) {
+                    if damage_lethal(&enemy, e.damage) do kill_enemy(idx, game_ctx.enemies)
+                }
+            }
+        }
+
+        if update_timer(&e.timer, dt) {
+            sa.unordered_remove(&game_ctx.explosion_rects, idx)
+        }
     }
 }
 

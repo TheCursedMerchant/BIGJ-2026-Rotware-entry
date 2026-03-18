@@ -43,6 +43,7 @@ Box :: struct {
     preview_rect    : Rectangle,
     preview_color   : rl.Color,
     color           : rl.Color,
+    explode_color   : [4]f32,
     tile_size       : [2]int, 
     draw_offset     : [2]f32,
     creator_idx     : int,
@@ -176,7 +177,7 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
                 colors = box.colors,
                 color = box.colors[.Primary],
                 line_thickness = 1.0,
-                creator_idx = box_idx
+                creator_idx = box_idx,
             },
             prev_pos = box.rectangle.xy,
             timer = { duration = 2.0 }

@@ -7,10 +7,10 @@ import "core:log"
 
 BG_COLOR :: rl.Color{ 20, 30, 38, 255 }
 
-draw_frame :: proc(dt: f32) {
+draw_frame :: proc(dt: f32, vdt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
 	    rl.ClearBackground(rl.BLACK)
-        paint_lvl_texture(dt)
+        paint_lvl_texture(dt, vdt)
         rl.DrawText(rl.TextFormat("%i", rl.GetFPS()), 32, 16, 10.0, rl.WHITE)
         draw_health_box(&game_ctx.player, dt) 
         rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 48, 10.0, rl.WHITE)
@@ -25,7 +25,7 @@ draw_frame :: proc(dt: f32) {
     rl.EndDrawing()
 }
 
-paint_lvl_texture :: proc(dt: f32) {
+paint_lvl_texture :: proc(dt: f32, vdt: f32) {
     rl.BeginMode2D(game_ctx.camera)
         player := &game_ctx.player
         // Draw Tiles
@@ -46,7 +46,7 @@ paint_lvl_texture :: proc(dt: f32) {
         kb_draw_pos : [2]f32
         for &body in sa.slice(&game_ctx.collision_ctx.kick_boxes) { 
             kb_draw_pos = interpolate_pos(body.prev_pos, body.box.rectangle.xy, dt)
-            box_draw_at_pos(body.box, kb_draw_pos) 
+            box_draw_at_pos(body.box, kb_draw_pos)
         }
 
         //Draw Enemies
@@ -57,8 +57,15 @@ paint_lvl_texture :: proc(dt: f32) {
             enemy.attack_box.current_color = fade_color(enemy.attack_box.current_color, 20.0)
         }
 
+        //Draw Explosions
+        for &e in sa.slice(&game_ctx.explosion_rects) {
+            rl.DrawRectangleRec(rect_to_rectangle(e.rect), fcolor_to_color(e.color))
+            e.color = fade_color(e.color, 20.0)
+        }
+
         // Draw Ents/Player
         rl.DrawRectangleRec(rect_to_rectangle(player.stomp.hitbox.rect), fcolor_to_color(player.stomp.hitbox.current_color))
+        update_atlas_anim(&player.render.anim, vdt)
         player.stomp.hitbox.current_color = fade_color(player.stomp.hitbox.current_color, 20.0)
         player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)

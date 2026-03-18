@@ -98,7 +98,14 @@ add_enemy :: proc(enemy: Enemy, data: ^EnemyData) {
         log.debug("Reactivating dead entity!")
         next_idx := pop(&data.dead)
         data.active[next_idx] = enemy
+        data.active[next_idx].kb.prev_pos = enemy.kb.box.rectangle.xy
     } else {
         append(&data.active, enemy)
     }
 }
+
+damage_lethal :: proc(enemy: ^Enemy, dam : f32) -> bool {
+    enemy.health -= dam
+    return enemy.health <= 0
+}
+

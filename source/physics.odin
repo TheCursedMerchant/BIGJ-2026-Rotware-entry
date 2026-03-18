@@ -207,10 +207,8 @@ move_axis_kbs_enemies :: proc(
                 has_collision ||= aabb_collision(test_rect, game_ctx.player.kinematic_body.box.rectangle)
                 for &e, idx in enemies {
                     if e.state != .Dead && (&e.kb != kb) {
-                        if aabb_collision(test_rect, e.kb.box.rectangle) {
-                            e.health -= kb.box.active_dam
-                            if e.health <= 0 do kill_enemy(idx, game_ctx.enemies)
-                            log.debugf("Enemy health after box : %v", e.health)
+                        if aabb_collision(test_rect, e.kb.box.rectangle) { 
+                            if damage_lethal(&e, kb.box.active_dam) do kill_enemy(idx, game_ctx.enemies)
                         }
                     }
                 }
