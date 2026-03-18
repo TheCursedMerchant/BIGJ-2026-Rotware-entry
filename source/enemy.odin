@@ -85,6 +85,12 @@ kill_enemy :: proc(idx: int, data : ^EnemyData) {
     enemy := &game_ctx.enemies.active[idx]
     enemy^ = Enemy{ state = .Dead }
     append(&data.dead, idx)
+    spawner := game_ctx.wave_spawner
+    spawner.current_enemies -= 1
+
+    if !game_ctx.timers[.Spawn_Wave].running && can_spawn(spawner) {
+        start_timer(&game_ctx.timers[.Spawn_Wave])
+    }
 }
 
 add_enemy :: proc(enemy: Enemy, data: ^EnemyData) {

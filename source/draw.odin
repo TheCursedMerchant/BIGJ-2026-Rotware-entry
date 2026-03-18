@@ -13,6 +13,7 @@ draw_frame :: proc(dt: f32) {
         paint_lvl_texture(dt)
         rl.DrawText(rl.TextFormat("%i", rl.GetFPS()), 32, 16, 10.0, rl.WHITE)
         draw_health_box(&game_ctx.player, dt) 
+        rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 48, 10.0, rl.WHITE)
         rl.EndTextureMode()
 
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
@@ -57,16 +58,17 @@ paint_lvl_texture :: proc(dt: f32) {
         }
 
         // Draw Ents/Player
-        #reverse for &render, idx in sa.slice(&player.after_images) { 
-            draw_fade_render(&render, 20.0) 
-            if render.fcolor.a == 0 { sa.unordered_remove(&player.after_images, idx) }
-        }
         rl.DrawRectangleRec(rect_to_rectangle(player.stomp.hitbox.rect), fcolor_to_color(player.stomp.hitbox.current_color))
         player.stomp.hitbox.current_color = fade_color(player.stomp.hitbox.current_color, 20.0)
         player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
         //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
+
+        #reverse for &render, idx in sa.slice(&player.after_images) { 
+            draw_fade_render(&render, 20.0) 
+            if render.fcolor.a == 0 { sa.unordered_remove(&player.after_images, idx) }
+        }
     rl.EndMode2D()
 }
 

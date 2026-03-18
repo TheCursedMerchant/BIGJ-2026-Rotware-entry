@@ -38,14 +38,25 @@ Context :: struct {
     camera                  : FollowCamera,
     update_timer            : f32,
     res_scale_factor        : f32,
+    active_kbs              : int,
     pattern_master          : ^HitboxPatternMaster,
     enemies                 : ^EnemyData,
     level                   : ^Level,
     collision_ctx           : ^CollisionContext,
-    active_kbs              : int,
+    wave_spawner            : ^WaveSpawner,
 }
 
-TimerTag :: enum { After_Image, Player_Dash, Player_Stomp, Spawn_Pattern, Spawn_Area, Player_Damaged }
+TimerTag :: enum {
+    After_Image,
+    Player_Dash,
+    Player_Stomp,
+    Spawn_Pattern,
+    Spawn_Area,
+    Player_Damaged,
+    Spawn_Wave,
+    Wave_Spawn_Enemy,
+}
+
 Timer :: struct {
     time_left   : f32,
     duration    : f32,
@@ -160,14 +171,30 @@ init_game_ctx :: proc() {
         target_zoom = 1.0,
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
-    game_ctx.collision_ctx = new(CollisionContext)
+    game_ctx.active_kbs = 0
+    game_ctx.collision_ctx = new(CollisionContext) 
+    game_ctx.wave_spawner = new(WaveSpawner)
+    alloc_game_data(game_ctx)
+    init_global_timers()
+    init_wave_spawner(game_ctx.wave_spawner)
+    spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
+    // Init timers and spawn data
+    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
+    sa.append(&game_ctx.pattern_master.patterns, single_hitbox)
+    start_global_timers()
+}
+
+start_global_timers :: proc() {
+    start_timer(&game_ctx.timers[.Spawn_Pattern])
+    start_timer(&game_ctx.timers[.Spawn_Area])
+    start_timer(&game_ctx.timers[.Spawn_Wave])
+}
+
+alloc_game_data :: proc(ctx: ^Context) {
     game_ctx.enemies = new(EnemyData, main_allocator)
     game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
     game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
     game_ctx.pattern_master = new(HitboxPatternMaster, main_allocator)
-    game_ctx.active_kbs = 0
-    init_global_timers()
-    add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
 }
 
 init_global_timers :: proc() {
@@ -177,6 +204,8 @@ init_global_timers :: proc() {
     game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
     game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
     game_ctx.timers[.Player_Damaged] = { duration = 1.0 }
+    game_ctx.timers[.Spawn_Wave] = { duration = 20.0 }
+    game_ctx.timers[.Wave_Spawn_Enemy] = { duration = 0.8 }
 }
 
 calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
@@ -195,34 +224,6 @@ spawn_random_area :: proc(spawner : ^AreaSpawner) {
         sa.append(&game_ctx.collision_ctx.box_areas, spawner.next_area)
         update_active_kbs(1)
     }
-}
-
-// NOTE: For testing only
-add_test_data :: proc(ctx: ^CollisionContext, pm : ^HitboxPatternMaster) {
-//    f_tile_dim := arr_cast(NATIVE_TILE_DIM, f32)
-//      test_box := box_create_tile_size(pos = {16, 16}, tile_size = [2]int{4, 4},thick = 1.0)
-//      sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-//    test_box = box_create_tile_size(pos = {6, 6}, tile_size = [2]int{4, 4},thick = 1.0)
-//    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-//
-//    test_box = box_create_tile_size(pos = {12, 12}, tile_size = [2]int{3, 3},thick = 1.0)
-//    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-//    test_box = box_create_tile_size(pos = {4, 2}, tile_size = [2]int{2, 2},thick = 1.0)
-//    sa.append(&game_ctx.collision_ctx.box_areas, test_box)
-
-    add_enemy(basic_enemy_at_pos({ 1, 1 }), game_ctx.enemies)
-    add_enemy(basic_enemy_at_pos({ 1, 2 }), game_ctx.enemies)
-    add_enemy(basic_enemy_at_pos({ 1, 3 }), game_ctx.enemies)
-    add_enemy(basic_enemy_at_pos({ 1, 4 }), game_ctx.enemies)
-    add_enemy(basic_enemy_at_pos({ 1, 5 }), game_ctx.enemies)
-    add_enemy(basic_enemy_at_pos({ 1, 6 }), game_ctx.enemies)
-    add_enemy(basic_enemy_at_pos({ 1, 7 }), game_ctx.enemies)
-
-    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
-    sa.append(&pm.patterns, single_hitbox)
-
-    start_timer(&game_ctx.timers[.Spawn_Pattern])
-    start_timer(&game_ctx.timers[.Spawn_Area])
 }
 
 init_player :: proc() {
@@ -269,6 +270,7 @@ reset_level :: proc () {
     free_all(main_allocator)
     init_player()
     game_ctx.collision_ctx^ = CollisionContext{}
+    game_ctx.wave_spawner.current_enemies = 0
     center_cell := SCENE_LEVEL_DIM.x / 2
     level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
     screen_res := arr_cast(TARGET_RES, f32)
@@ -281,13 +283,11 @@ reset_level :: proc () {
         target_zoom = 1.0,
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
-    game_ctx.enemies = new(EnemyData, main_allocator)
-    game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
-    game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
-    game_ctx.pattern_master = new(HitboxPatternMaster)
     game_ctx.active_kbs = 0
+    alloc_game_data(game_ctx)
     init_global_timers()
-    add_test_data(game_ctx.collision_ctx, game_ctx.pattern_master)
+    spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
+    start_global_timers()
 }
 
 update :: proc() {
@@ -352,6 +352,15 @@ update_global_timers :: proc(dt: f32) {
             case .Spawn_Area:
                 spawner := &game_ctx.player.spawner
                 spawn_random_area(spawner)
+            case .Spawn_Wave:
+                spawner := game_ctx.wave_spawner
+                if spawner.current_enemies + spawner.pack_size <= spawner.max_enemies {
+                    //spawn_wave(spawner, game_ctx.enemies)
+                    //start_timer(&game_ctx.timers[.Spawn_Wave])
+                    start_timer(&game_ctx.timers[.Wave_Spawn_Enemy])
+                }
+            case .Wave_Spawn_Enemy:
+                spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
             case .Player_Damaged: // Noop
             case .Player_Dash: // Noop
             case .Player_Stomp: // Noop
@@ -369,7 +378,8 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
         }
     }
 
-    for i in sa.slice(&free_kbs) {
+    #reverse for i in sa.slice(&free_kbs) {
+        game_ctx.collision_ctx.kick_boxes.data[i] = {}
         sa.unordered_remove(&game_ctx.collision_ctx.kick_boxes, i)
     }
 }
