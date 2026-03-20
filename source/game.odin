@@ -397,6 +397,18 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
     }
 }
 
+explode_kickbox :: proc(kb: ^KinematicBody) {
+    explosion := Explosion { timer = { duration = 0.2 } }
+    explosion.rect = kb.box.rectangle
+    explosion.rect.zw *= 5.0
+    explosion.rect.xy = get_rect_center(kb.box.rectangle) - (explosion.rect.zw / 2.0)
+    explosion.damage = kb.box.active_dam * 5
+    explosion.color = RED
+    start_timer(&explosion.timer)
+    sa.append(&game_ctx.explosion_rects, explosion)
+    update_active_kbs(-1)
+}
+
 update_explosion_timers :: proc(dt: f32) {
     #reverse for &e, idx in sa.slice(&game_ctx.explosion_rects) {
         if e.timer.running {
@@ -569,7 +581,7 @@ physics_update :: proc (dt: f32) {
         }
     }
 
-    for &kb in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
+    #reverse for &kb, idx in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
         kb.prev_pos = kb.box.rectangle.xy
         kb.vel = la.lerp(kb.vel, [2]f32{}, 12.0 * dt)
         if abs(kb.vel.x) < 0.05 && abs(kb.vel.y) < 0.05 { 
@@ -579,7 +591,7 @@ physics_update :: proc (dt: f32) {
         }
         switch kb.box.state {
             case .None : move_kickbox(&kb, game_ctx.collision_ctx, dt)
-            case .Active : move_active_kickbox(&kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
+            case .Active : move_active_kickbox(idx, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
         }
     }
 

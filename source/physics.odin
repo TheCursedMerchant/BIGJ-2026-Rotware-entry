@@ -3,6 +3,7 @@ import la "core:math/linalg"
 import sa "core:container/small_array"
 import "core:log"
 import rl "vendor:raylib"
+import "core:slice" 
 
 // Check for Collisions
 MAX_ITERS :: 4
@@ -173,7 +174,7 @@ move_axis_kbs_enemies :: proc(
     k_bodies        : []KinematicBody,
     enemies         : []Enemy,
     axis_vec        : [2]f32,
-) {
+) -> bool {
     axis_vel := axis_vec * kb.vel 
     axis_remainder := axis_vec * kb.remainder
     vel := get_axis(axis_vel)
@@ -205,10 +206,13 @@ move_axis_kbs_enemies :: proc(
                 }
 
                 has_collision ||= aabb_collision(test_rect, game_ctx.player.kinematic_body.box.rectangle)
+
                 for &e, idx in enemies {
                     if e.state != .Dead && (&e.kb != kb) {
-                        if aabb_collision(test_rect, e.kb.box.rectangle) { 
-                            if damage_lethal(&e, kb.box.active_dam) do kill_enemy(idx, game_ctx.enemies)
+                        if aabb_collision(test_rect, e.kb.box.rectangle) {
+                            has_collision = true
+                            break
+                            //if damage_lethal(&e, kb.box.active_dam) do kill_enemy(idx, game_ctx.enemies)
                         }
                     }
                 }
@@ -217,6 +221,7 @@ move_axis_kbs_enemies :: proc(
             }
 
             if has_collision {
+                explode_kickbox(kb)
                 kb.remainder = remainder * axis_vec
                 kb.vel *= axis_vec.yx
                 break
@@ -227,7 +232,9 @@ move_axis_kbs_enemies :: proc(
                 kb.box.rectangle = test_rect
             }
         }
+        return has_collision
     }
+    return false
 }
 
 // Returns non zero axis
@@ -268,21 +275,31 @@ move_kickbox :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f32) {
     }
 }
 
+// WARN: This can trigger removals so be careful when iterating!!
 move_active_kickbox :: proc(
-    kb: ^KinematicBody, 
+    kb_idx : int,
     ctx : ^CollisionContext,
     enemies : []Enemy, 
     dt : f32
 ) {
+    kb := &ctx.kick_boxes.data[kb_idx]
     solids := sa.slice(&ctx.static)
     k_bodies := sa.slice(&ctx.kick_boxes)
     collider_idxs : sa.Small_Array(16, int)
     origin_vel := kb.vel
-    move_axis_kbs_enemies(kb, &collider_idxs, solids, k_bodies, enemies, { 1.0, 0.0 })
-    move_axis_kbs_enemies(kb, &collider_idxs, solids, k_bodies, enemies, { 0.0, 1.0 })
+    has_collision := move_axis_kbs_enemies(kb, &collider_idxs, solids, k_bodies, enemies, { 1.0, 0.0 })
+    has_collision ||= move_axis_kbs_enemies(kb, &collider_idxs, solids, k_bodies, enemies, { 0.0, 1.0 })
     target_vel : [2]f32
-    for idx in sa.slice(&collider_idxs) {
-        ctx.kick_boxes.data[idx].vel = origin_vel * 1.5
+
+    if has_collision {
+        sa.append(&collider_idxs, kb_idx)
+        slice.sort(sa.slice(&collider_idxs))
+    }
+
+    #reverse for idx in sa.slice(&collider_idxs) {
+        if idx != kb_idx do explode_kickbox(&ctx.kick_boxes.data[idx])
+        sa.unordered_remove(&ctx.kick_boxes, idx) 
+        //ctx.kick_boxes.data[idx].vel = origin_vel * 1.5
     }
 }
 
