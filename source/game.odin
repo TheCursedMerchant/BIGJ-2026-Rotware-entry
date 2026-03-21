@@ -38,7 +38,8 @@ Context :: struct {
     camera                  : FollowCamera,
     update_timer            : f32,
     res_scale_factor        : f32,
-    active_kbs              : int,
+    currency                : int,
+    active_areas            : int,
     difficulty_lvl          : int,
     pattern_master          : ^HitboxPatternMaster,
     enemies                 : ^EnemyData,
@@ -133,12 +134,12 @@ init_game_ctx :: proc() {
         target_zoom = 1.0,
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
-    game_ctx.active_kbs = 0
+    game_ctx.active_areas = 0
     game_ctx.collision_ctx = new(CollisionContext) 
     game_ctx.wave_spawner = new(WaveSpawner)
     alloc_game_data(game_ctx)
     init_global_timers()
-    init_wave_spawner(game_ctx.wave_spawner)
+    init_wave_spawner(game_ctx.wave_spawner, 0)
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
     // Init timers and spawn data
     single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
@@ -146,28 +147,11 @@ init_game_ctx :: proc() {
     start_global_timers()
 }
 
-start_global_timers :: proc() {
-    start_timer(&game_ctx.timers[.Spawn_Pattern])
-    start_timer(&game_ctx.timers[.Spawn_Area])
-    start_timer(&game_ctx.timers[.Spawn_Wave])
-}
-
 alloc_game_data :: proc(ctx: ^Context) {
     game_ctx.enemies = new(EnemyData, main_allocator)
     game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
     game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
     game_ctx.pattern_master = new(HitboxPatternMaster, main_allocator)
-}
-
-init_global_timers :: proc() {
-    game_ctx.timers[.After_Image] = { duration = 0.064 }
-    game_ctx.timers[.Player_Dash] = { duration = 1.0 }
-    game_ctx.timers[.Player_Stomp] = { duration = 1.0 }
-    game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
-    game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
-    game_ctx.timers[.Player_Damaged] = { duration = 1.0 }
-    game_ctx.timers[.Spawn_Wave] = { duration = 20.0 }
-    game_ctx.timers[.Wave_Spawn_Enemy] = { duration = 0.8 }
 }
 
 reset_level :: proc () {
@@ -189,7 +173,8 @@ reset_level :: proc () {
         target_zoom = 1.0,
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
-    game_ctx.active_kbs = 0
+    game_ctx.active_areas = 0
+    game_ctx.currency = 0
     alloc_game_data(game_ctx)
     init_global_timers()
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
@@ -235,6 +220,23 @@ update :: proc() {
 	free_all(context.temp_allocator)
 }
 
+init_global_timers :: proc() {
+    game_ctx.timers[.After_Image] = { duration = 0.064 }
+    game_ctx.timers[.Player_Dash] = { duration = 1.0 }
+    game_ctx.timers[.Player_Stomp] = { duration = 1.0 }
+    game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
+    game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
+    game_ctx.timers[.Player_Damaged] = { duration = 1.0 }
+    game_ctx.timers[.Spawn_Wave] = { duration = 20.0 }
+    game_ctx.timers[.Wave_Spawn_Enemy] = { duration = 0.8 }
+}
+
+start_global_timers :: proc() {
+    start_timer(&game_ctx.timers[.Spawn_Pattern])
+    start_timer(&game_ctx.timers[.Spawn_Area])
+    start_timer(&game_ctx.timers[.Spawn_Wave])
+}
+
 update_global_timers :: proc(dt: f32) {
     complete_timers : sa.Small_Array(16, TimerTag)
     for &timer, idx in game_ctx.timers { 
@@ -270,9 +272,7 @@ update_global_timers :: proc(dt: f32) {
             case .Player_Dash:
                 dash := &game_ctx.player.dash
                 dash.charges = la.min(dash.charges + 1, dash.max_charges)
-                log.debugf("Dash charges regened : %v", dash.charges)
                 if dash.charges < dash.max_charges {
-                    log.debug("Starting dash recharge timer")
                     start_timer(&game_ctx.timers[.Player_Dash], game_ctx.player.dash.recharge_time)
                 }
             case .Player_Stomp: // Noop
@@ -293,7 +293,7 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
             start_timer(&explosion.timer)
             sa.append(&game_ctx.explosion_rects, explosion)
             sa.append(&free_kbs, idx)
-            update_active_kbs(-1)
+            update_active_areas(-1)
         }
     }
 
@@ -303,6 +303,7 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
 }
 
 explode_kickbox :: proc(kb: ^KinematicBody) {
+    stop_timer(&kb.timer)
     explosion := Explosion { timer = { duration = 0.2 } }
     explosion.rect = kb.box.rectangle
     explosion.rect.zw *= 5.0
@@ -311,7 +312,7 @@ explode_kickbox :: proc(kb: ^KinematicBody) {
     explosion.color = RED
     start_timer(&explosion.timer)
     sa.append(&game_ctx.explosion_rects, explosion)
-    update_active_kbs(-1)
+    update_active_areas(-1)
 }
 
 update_explosion_timers :: proc(dt: f32) {
@@ -331,10 +332,10 @@ update_explosion_timers :: proc(dt: f32) {
     }
 }
 
-update_active_kbs :: proc(delta : int) {
-    game_ctx.active_kbs += delta
+update_active_areas :: proc(delta : int) {
+    game_ctx.active_areas += delta
     max_areas := game_ctx.player.spawner.max_areas
-    if !game_ctx.timers[.Spawn_Area].running && game_ctx.active_kbs < max_areas {
+    if !game_ctx.timers[.Spawn_Area].running && game_ctx.active_areas < max_areas {
         start_timer(&game_ctx.timers[.Spawn_Area])
     }
 }
@@ -375,10 +376,6 @@ update_timer :: proc(timer: ^Timer, dt: f32) -> (complete: bool) {
 stop_timer :: proc(timer: ^Timer) {
     timer.time_left = 0
     timer.running = false
-}
-
-vec_comp_in_range :: proc(a, b : [2]$T) -> bool {
-    return a.x < b.x && a.y < b.y
 }
 
 physics_update :: proc (dt: f32) {
@@ -422,6 +419,10 @@ physics_update :: proc (dt: f32) {
         if abs(enemy.kb.vel.x) < 0.05 && abs(enemy.kb.vel.y) < 0.05 do enemy.kb.vel = {}
         move_enemy(&enemy.kb, game_ctx.collision_ctx, game_ctx.enemies.active[:], dt)
     }
+}
+
+update_currency :: proc(val : int) {
+    game_ctx.currency += val
 }
 
 // In a web build, this is called when browser changes size. Remove the
@@ -513,4 +514,8 @@ make_p_arena_alloc :: proc(alloc: ^mem.Allocator, arena : ^mem.Arena, block : ^[
 calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
     dim := arr_cast(size * NATIVE_TILE_DIM.x, f32)
     return {pos.x, pos.y, dim.x, dim.y }
+}
+
+vec_comp_in_range :: proc(a, b : [2]$T) -> bool {
+    return a.x < b.x && a.y < b.y
 }

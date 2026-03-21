@@ -38,10 +38,11 @@ draw_frame :: proc(dt: f32, vdt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
 	    rl.ClearBackground(rl.BLACK)
         paint_lvl_texture(dt, vdt)
-        rl.DrawText(rl.TextFormat("%i", rl.GetFPS()), 32, 16, 10.0, rl.WHITE)
+        rl.DrawFPS(rl.GetScreenWidth() - 32, 16)
         draw_health_box(&game_ctx.player, dt) 
-        rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 48, 10.0, rl.WHITE)
-        rl.EndTextureMode()
+        rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 16, 10.0, rl.WHITE)
+        rl.DrawText(rl.TextFormat("Currency : %i", game_ctx.currency), 32, 48, 10.0, rl.WHITE)
+    rl.EndTextureMode()
 
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
 	src_rect := rl.Rectangle{0, 0, f32(game_ctx.level_render.texture.width), f32(-game_ctx.level_render.texture.height)}

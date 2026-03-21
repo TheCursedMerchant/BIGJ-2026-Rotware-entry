@@ -136,7 +136,6 @@ handle_player_idle :: proc(player: ^Player) {
     if has_mv_event && dash_available && is_input_pressed(action_inputs[.Dash]) {
         player.state = .Dash
         player.dash.charges -= 1
-        log.debugf("Dash charges : %v", player.dash.charges)
         target_vel := arr_cast(mv_dir, f32) * player.speed * player.dash.multiplier
         player.kinematic_body.vel = target_vel
         create_player_after_image()
@@ -159,10 +158,33 @@ left_stomp :: proc (player: ^Player) {
     stomp_center := get_rect_center(player.stomp.hitbox.rect)
     player.stomp.hitbox.current_color = player.stomp.hitbox.alt_color
 
+    // Eat Kickboxes for currency!
+    free_kbs : sa.Small_Array(16, int)
+    for &kb, idx in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
+        if rectangle_overlap(player.stomp.hitbox.rect, kb.box.rectangle) {
+            update_currency(10)
+            stop_timer(&kb.timer)
+            sa.append(&free_kbs, idx)
+        }
+    }
+
+    #reverse for i in sa.slice(&free_kbs) {
+        update_active_areas(-1)
+        sa.unordered_remove(&game_ctx.collision_ctx.kick_boxes, i)
+    }
+
+    new_size : [2]int
+    free_areas : sa.Small_Array(16, int)
     for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
         if rectangle_overlap(player.stomp.hitbox.rect, area.rectangle) {
-            shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
+            new_size = area.tile_size - { 1, 1 }
+            shrink_box(game_ctx.collision_ctx, &area, new_size, player.kinematic_body.box.rectangle, idx)
+            if new_size.x <= 1 && new_size.y <= 1 do sa.append(&free_areas, idx)
         }
+    }
+
+    #reverse for i in sa.slice(&free_areas) {
+        sa.unordered_remove(&game_ctx.collision_ctx.box_areas, i)
     }
 }
 
@@ -228,7 +250,7 @@ damage_player :: proc(player: ^Player, value : f32) {
 }
 
 spawn_random_area :: proc(spawner : ^AreaSpawner) {
-    if game_ctx.active_kbs < spawner.max_areas {
+    if game_ctx.active_areas < spawner.max_areas {
         new_dim := rand.int_range(2, spawner.max_size)
         spawner.rect.xy = game_ctx.player.kinematic_body.box.rectangle.xy
         new_x := int(rand.float32_range(spawner.rect.x, spawner.rect.x + spawner.rect.z)) % 16
@@ -236,6 +258,6 @@ spawn_random_area :: proc(spawner : ^AreaSpawner) {
 
         spawner.next_area = box_create_tile_size(pos = { new_x, new_y }, tile_size = [2]int{ new_dim, new_dim }, thick = 1.0)
         sa.append(&game_ctx.collision_ctx.box_areas, spawner.next_area)
-        update_active_kbs(1)
+        update_active_areas(1)
     }
 }

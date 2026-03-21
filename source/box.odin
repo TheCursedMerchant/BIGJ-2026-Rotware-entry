@@ -133,9 +133,6 @@ box_set_size_kb :: proc(box: ^Box, size : [2]int, player_rect : Rectangle, k_bod
             }
         }
 
-        player_in_min_size := rectangle_overlap(box.preview_rect, player_rect)
-        if player_in_min_size do return
-
         for &e, idx in game_ctx.enemies.active {
             if rectangle_overlap(e.kb.box.rectangle, box.rectangle){
                 kill_enemy(idx, game_ctx.enemies)
@@ -170,23 +167,32 @@ box_set_size_unsafe :: proc(box: ^Box, size : [2]int, player_rect : Rectangle) {
 shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect : Rectangle, box_idx: int) {
     box_set_size_kb(box, size, player_rect, sa.slice(&ctx.kick_boxes))
     if box.tile_size == { 1, 1 } {
-        kick_box := KinematicBody {
-            box = {
-                tile_size = box.tile_size,
-                rectangle = box.rectangle,
-                colors = box.colors,
-                color = box.colors[.Primary],
-                line_thickness = 1.0,
-                creator_idx = box_idx,
-            },
-            prev_pos = box.rectangle.xy,
-            timer = { duration = 2.0 }
+        if rectangle_overlap(box.rectangle, player_rect) {
+            update_currency(10)
+            update_active_areas(-1)
+            log.debugf("Eating kickbox!")
+        } else {
+            kick_box := KinematicBody {
+                box = {
+                    tile_size = box.tile_size,
+                    rectangle = box.rectangle,
+                    colors = box.colors,
+                    color = box.colors[.Primary],
+                    line_thickness = 1.0,
+                },
+                prev_pos = box.rectangle.xy,
+                timer = { duration = 2.0 }
+            }
+            sa.append(&ctx.kick_boxes, kick_box)
         }
-        sa.append(&ctx.kick_boxes, kick_box)
-        box.rectangle = {}
-        box.preview_rect = {}
-        box.preview_color = {}
+        clear_box(box)
     }
+}
+
+clear_box :: proc(box: ^Box) {
+    box.rectangle = {}
+    box.preview_rect = {}
+    box.preview_color = {}
 }
 
 box_draw :: proc(box: Box) {
