@@ -3,7 +3,8 @@ package game
 import rl "vendor:raylib"
 
 ActionInputKind :: enum {
-    Stomp,
+    Left_Stomp,
+    Right_Stomp,
     Dash,
 }
 
@@ -35,8 +36,9 @@ dir_inputs := [DirectionInputKind]DirectionInput {
 }
 
 action_inputs := [ActionInputKind]ActionInput {
-    .Stomp = { .H, .Stomp },
-    .Dash = { .J, .Dash },
+    .Left_Stomp = { .H, .Left_Stomp },
+    .Right_Stomp = { .J, .Right_Stomp },
+    .Dash = { .K, .Dash },
 }
 
 // TODO: Add versions that take regular inputs that don't 

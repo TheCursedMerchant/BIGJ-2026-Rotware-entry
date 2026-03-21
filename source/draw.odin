@@ -64,10 +64,29 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
         }
 
         // Draw Ents/Player
+        player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
+
+        meter_draw_pos := player.render.pos + { -2, -16 }
+        player.stomp.meter.per = game_ctx.timers[.Player_Stomp].time_left / game_ctx.timers[.Player_Stomp].duration
+        if game_ctx.timers[.Player_Stomp].running {
+            draw_stomp_meter_at_pos(&player.stomp.meter, meter_draw_pos)
+        }
+
+        if player.dash.charges < player.dash.max_charges {
+            for i in 0..<player.dash.max_charges {
+                player.dash.renders.inactive.pos = player.render.pos + ({ 5, 0 } * f32(i))
+                draw_pixel_perfect_render(player.dash.renders.inactive)
+            }
+
+            for i in 0..<player.dash.charges {
+                player.dash.renders.ready.pos = player.render.pos + ({ 5, 0 } * f32(i))
+                draw_pixel_perfect_render(player.dash.renders.ready)
+            }
+        }
+
         rl.DrawRectangleRec(rect_to_rectangle(player.stomp.hitbox.rect), fcolor_to_color(player.stomp.hitbox.current_color))
         update_atlas_anim(&player.render.anim, vdt)
         player.stomp.hitbox.current_color = fade_color(player.stomp.hitbox.current_color, 20.0)
-        player.render.pos = interpolate_pos(player.kinematic_body.prev_pos, get_pos(player^), dt)
         draw_pixel_perfect_render(player.render)
         // DEBUG Player collision Box
         //rl.DrawRectangleRec(box_to_rect(game_ctx.player.kinematic_body.box), rl.RED)
@@ -131,6 +150,17 @@ draw_health_box :: proc(player: ^Player, dt: f32) {
     rl.DrawRectangleRec(rect_to_rectangle(bg_rect), rl.DARKGRAY)
     rl.DrawRectangleRec(rect_to_rectangle(mid_rect), rl.RED)
     rl.DrawRectangleRec(rect_to_rectangle(top_rect), rl.GREEN)
+}
+
+draw_stomp_meter_at_pos :: proc(meter: ^MeterRender, pos : [2]f32) {
+    bg := &meter.rects[.Bg]
+    bg.xy = pos
+    rl.DrawRectangleRec(rect_to_rectangle(bg^), meter.colors[.Bg])
+    
+    fg := &meter.rects[.Fg]
+    fg.xy = pos
+    fg.z = bg.z - (meter.per * bg.z)
+    rl.DrawRectangleRec(rect_to_rectangle(fg^), meter.colors[.Fg])
 }
 
 interpolate_pos :: proc(prev, current: [2]f32, dt : f32) -> [2]f32 {

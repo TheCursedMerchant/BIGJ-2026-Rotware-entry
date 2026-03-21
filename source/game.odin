@@ -16,7 +16,6 @@ NATIVE_RES :: [2]i32{ 768, 432 }
 NATIVE_TILE_DIM :: [2]int{ 16, 16 }
 SCENE_LEVEL_DIM :: [2]int{ 25, 25 }
 CAMERA_ZOOM_SPEED :: 2.5
-DASH_MULTIPLIER :: 4.0
 DASH_FALL_OFF :: [2]f32{ 5.0, 5.0 }
 MAX_TIMERS :: 16
 SLAM_KICK_SHAKE :: 13
@@ -73,6 +72,7 @@ Timer :: struct {
 }
 
 PlayerState :: enum { Idle, Dash }
+PlayerOptions :: enum { Damaged }
 
 Player :: struct {
     render          : Render,
@@ -87,10 +87,12 @@ Player :: struct {
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
     state           : PlayerState,
     stomp           : Stomp,
+    dash            : Dash,
     spawner         : AreaSpawner,
     health          : f32,
     prev_health     : f32,
     max_health      : f32,
+    options         : bit_set[PlayerOptions],
 }
 
 AreaSpawner :: struct {
@@ -101,10 +103,19 @@ AreaSpawner :: struct {
 }
 
 Stomp :: struct {
+    meter       : MeterRender,
     hitbox      : HitBoxRender,
     force       : f32,
     stun        : f32,
     damage      : f32,
+}
+
+Dash :: struct {
+    renders          : ChargeRenders,
+    charges         : int,
+    max_charges     : int,
+    multiplier      : f32,
+    recharge_time   : f32,
 }
 
 Render :: struct {
@@ -116,6 +127,18 @@ Render :: struct {
 ColorRender :: struct {
     render : Render,
     fcolor : [4]f32,
+}
+
+ChargeRenders :: struct {
+    ready           : Render,
+    inactive        : Render,
+}
+
+MeterRenderRect :: enum { Bg, Mid, Fg }
+MeterRender :: struct {
+    rects   : [MeterRenderRect]Rectangle,
+    colors  : [MeterRenderRect]rl.Color,
+    per     : f32,
 }
 
 run: bool
@@ -260,7 +283,21 @@ init_player :: proc() {
             damage = 1.0,
             force = 20.0,
             stun = 0.2,
-            hitbox = { rect = { 0, 0, 48, 48 }, color = WHITE },
+            hitbox = { rect = { 0, 0, 48, 48 }, color = WHITE, alt_color = BLUE },
+            meter = { 
+                rects = { .Bg = {0, 0, 16, 1}, .Mid = {}, .Fg = { 0, 0, 16, 1 } },
+                colors = { .Bg = rl.BLACK, .Mid = {}, .Fg = rl.WHITE },
+            },
+        },
+        dash = {
+            multiplier = 4.0,
+            recharge_time = 1.5,
+            max_charges = 3,
+            charges = 3,
+            renders = {
+                ready = { anim = create_atlas_anim(.Dash_Charge_Enabled), offset = { -2, 16 } },
+                inactive = { anim = create_atlas_anim(.Dash_Charge_Disabled), offset = { -2, 16 } },
+            }
         },
         spawner = {
             max_areas = 4,
@@ -355,7 +392,6 @@ update_global_timers :: proc(dt: f32) {
                 for pattern in sa.slice(&game_ctx.pattern_master.patterns) {
                     new_pos.x = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.x * NATIVE_TILE_DIM.x))
                     new_pos.y = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.y * NATIVE_TILE_DIM.y))
-                    log.debugf("Spawining pattern at pos : %v", new_pos)
                     spawn_hitbox_pattern_at_pos(&game_ctx.pattern_master.patterns.data[0], new_pos)
                 }
             case .Spawn_Area:
@@ -368,8 +404,16 @@ update_global_timers :: proc(dt: f32) {
                 }
             case .Wave_Spawn_Enemy:
                 spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
-            case .Player_Damaged: // Noop
-            case .Player_Dash: // Noop
+            case .Player_Damaged: 
+                game_ctx.player.options -= { .Damaged }
+            case .Player_Dash:
+                dash := &game_ctx.player.dash
+                dash.charges = la.min(dash.charges + 1, dash.max_charges)
+                log.debugf("Dash charges regened : %v", dash.charges)
+                if dash.charges < dash.max_charges {
+                    log.debug("Starting dash recharge timer")
+                    start_timer(&game_ctx.timers[.Player_Dash], game_ctx.player.dash.recharge_time)
+                }
             case .Player_Stomp: // Noop
         }
     }
@@ -467,29 +511,49 @@ handle_player_idle :: proc(player: ^Player) {
         player.kinematic_body.vel = 0
     }
 
-    dash_available := !game_ctx.timers[.Player_Dash].running
+    dash_available := player.dash.charges > 0
     stomp_available := !game_ctx.timers[.Player_Stomp].running
 
     if has_mv_event && dash_available && is_input_pressed(action_inputs[.Dash]) {
         player.state = .Dash
-        target_vel := arr_cast(mv_dir, f32) * player.speed * DASH_MULTIPLIER
+        player.dash.charges -= 1
+        log.debugf("Dash charges : %v", player.dash.charges)
+        target_vel := arr_cast(mv_dir, f32) * player.speed * player.dash.multiplier
         player.kinematic_body.vel = target_vel
         create_player_after_image()
         start_timer(&game_ctx.timers[.After_Image])
-        start_timer(&game_ctx.timers[.Player_Dash])
-    } else if stomp_available && is_input_pressed(action_inputs[.Stomp]) {
-        stomp(player)
+        if !game_ctx.timers[.Player_Dash].running {
+            start_timer(&game_ctx.timers[.Player_Dash], player.dash.recharge_time)
+        }
+    } else if is_input_pressed(action_inputs[.Left_Stomp]) {
+        left_stomp(player)
+    } else if  stomp_available &&  is_input_pressed(action_inputs[.Right_Stomp]) {
+        right_stomp(player)
     }
 }
 
-stomp :: proc (player: ^Player) {
+left_stomp :: proc (player: ^Player) {
+    shake_cam(SLAM_KICK_SHAKE)
+    player_center := get_rect_center(player.kinematic_body.box.rectangle)
+    stomp_center_offset := player.stomp.hitbox.rect.zw / 2
+    player.stomp.hitbox.rect.xy = player_center - stomp_center_offset
+    stomp_center := get_rect_center(player.stomp.hitbox.rect)
+    player.stomp.hitbox.current_color = player.stomp.hitbox.alt_color
+
+    for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
+        if rectangle_overlap(player.stomp.hitbox.rect, area.rectangle) {
+            shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
+        }
+    }
+}
+
+right_stomp :: proc(player: ^Player) {
     shake_cam(SLAM_KICK_SHAKE)
     player_center := get_rect_center(player.kinematic_body.box.rectangle)
     stomp_center_offset := player.stomp.hitbox.rect.zw / 2
     player.stomp.hitbox.rect.xy = player_center - stomp_center_offset
     stomp_center := get_rect_center(player.stomp.hitbox.rect)
     player.stomp.hitbox.current_color = player.stomp.hitbox.color
-    
     // Slam Boxes away
     kick_dir : [2]f32
     kb_center : [2]f32
@@ -504,12 +568,6 @@ stomp :: proc (player: ^Player) {
             start_timer(&kb.timer)
         }
     }
-    
-    for &area, idx in sa.slice(&game_ctx.collision_ctx.box_areas) {
-        if rectangle_overlap(player.stomp.hitbox.rect, area.rectangle) {
-            shrink_box(game_ctx.collision_ctx, &area, area.tile_size - { 1, 1 }, player.kinematic_body.box.rectangle, idx)
-        }
-    }
 
     // Stun kicked enemies
     for &enemy in game_ctx.enemies.active[:] {
@@ -520,18 +578,33 @@ stomp :: proc (player: ^Player) {
 }
 
 handle_player_dash :: proc(player: ^Player) {
-    if is_input_down(action_inputs[.Stomp]) {
+    if is_input_down(action_inputs[.Left_Stomp]) {
         player.state = .Idle
         player.kinematic_body.vel = 0
-        stomp(player)
+        left_stomp(player)
+    } else if is_input_down(action_inputs[.Right_Stomp]) {
+        player.state = .Idle
+        player.kinematic_body.vel = 0
+        right_stomp(player)
+        stop_timer(&game_ctx.timers[.Player_Stomp])
     } else if vec_comp_in_range(la.abs(player.kinematic_body.vel), DASH_FALL_OFF) {
         player.state = .Idle
     }
 }
 
-start_timer :: proc(timer: ^Timer) {
+start_timer :: proc {
+    restart_timer,
+    start_timer_dur,
+}
+
+restart_timer :: proc(timer: ^Timer) {
     timer.time_left = timer.duration
     timer.running = true
+}
+
+start_timer_dur :: proc(timer: ^Timer, dur : f32) {
+    timer.duration = dur
+    restart_timer(timer)
 }
 
 update_timer :: proc(timer: ^Timer, dt: f32) -> (complete: bool) {
@@ -544,17 +617,25 @@ update_timer :: proc(timer: ^Timer, dt: f32) -> (complete: bool) {
     return false
 }
 
+stop_timer :: proc(timer: ^Timer) {
+    timer.time_left = 0
+    timer.running = false
+}
+
 create_player_after_image :: proc() {
     after_image := ColorRender { render = game_ctx.player.render, fcolor = { 255.0, 255.0, 255.0, 255.0 } }
     sa.append(&game_ctx.player.after_images, after_image)
 }
 
 damage_player :: proc(player: ^Player, value : f32) {
-    player.prev_health = player.health
-    player.health -= value
-    if player.health <= 0 { log.debug("Player died!") }
-    shake_cam(32.0)
-    start_timer(&game_ctx.timers[.Player_Damaged])
+    if .Damaged not_in player.options {
+        player.prev_health = player.health
+        player.health -= value
+        player.options += { .Damaged }
+        if player.health <= 0 { log.debug("Player died!") }
+        shake_cam(32.0)
+        start_timer(&game_ctx.timers[.Player_Damaged])
+    }
 }
 
 vec_comp_in_range :: proc(a, b : [2]$T) -> bool {

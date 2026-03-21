@@ -63,6 +63,10 @@ Texture_Name :: enum {
 	Player13,
 	Player14,
 	Player15,
+	Dash_Charge0,
+	Dash_Charge1,
+	Dash_Charge2,
+	Dash_Charge3,
 }
 
 Atlas_Texture :: struct {
@@ -114,6 +118,10 @@ atlas_textures: [Texture_Name]Atlas_Texture = {
 	.Player13 = { rect = {353, 120, 11, 20}, offset_top = 5, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player14 = { rect = {317, 120, 11, 20}, offset_top = 5, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player15 = { rect = {317, 141, 12, 17}, offset_top = 8, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
+	.Dash_Charge0 = { rect = {195, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge1 = { rect = {356, 149, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge2 = { rect = {253, 149, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge3 = { rect = {258, 149, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
 }
 
 Animation_Name :: enum {
@@ -123,6 +131,8 @@ Animation_Name :: enum {
 	Player_Idle_Right,
 	Player_Idle_Up,
 	Player_Idle_Left,
+	Dash_Charge_Disabled,
+	Dash_Charge_Enabled,
 }
 
 Tag_Loop_Dir :: enum {
@@ -149,6 +159,8 @@ atlas_animations := [Animation_Name]Atlas_Animation {
 	.Player_Idle_Right = { first_frame = .Player4, last_frame = .Player7, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 	.Player_Idle_Up = { first_frame = .Player8, last_frame = .Player11, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 	.Player_Idle_Left = { first_frame = .Player12, last_frame = .Player15, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
+	.Dash_Charge_Disabled = { first_frame = .Dash_Charge0, last_frame = .Dash_Charge1, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
+	.Dash_Charge_Enabled = { first_frame = .Dash_Charge2, last_frame = .Dash_Charge3, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 }
 
 Atlas_Glyph :: struct {

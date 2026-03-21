@@ -5,6 +5,8 @@ import rl "vendor:raylib"
 import "core:log"
 
 RED :: [4]f32 { 255, 0, 0, 255 }
+GREEN :: [4]f32 { 0, 255, 0, 255 }
+BLUE :: [4]f32 { 0, 0, 255, 255 }
 WHITE :: [4]f32 { 255, 255, 255, 255 }
 
 EnemyState :: enum { Chase, Dead }
@@ -25,6 +27,7 @@ HitBoxRender :: struct {
     rect            : Rectangle,
     current_color   : [4]f32,
     color           : [4]f32,
+    alt_color       : [4]f32,
 }
 
 EnemyData :: struct {
