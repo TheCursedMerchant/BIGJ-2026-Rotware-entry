@@ -10,6 +10,7 @@ WaveSpawner :: struct {
     max_enemies     : int,
     current_pack    : int,
     next_spawn      : EnemyKind,
+    wave_count      : int,
 }
 
 init_wave_spawner :: proc(ws : ^WaveSpawner, pack_size : int = 5, max_enemies : int = 20) {
@@ -37,6 +38,7 @@ spawn_wave :: proc(spawner : ^WaveSpawner, enemies : ^EnemyData) {
         spawner.current_pack += 1
         start_timer(&game_ctx.timers[.Wave_Spawn_Enemy])
     } else {
+        spawn_loot()
         game_ctx.difficulty_lvl += 1
         spawner.current_pack = 0
         if can_spawn(spawner) {

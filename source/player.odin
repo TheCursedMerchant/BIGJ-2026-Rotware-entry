@@ -18,7 +18,6 @@ Player :: struct {
     render_color    : [4]f32,
     prev_dir        : [2]int,
     speed           : f32,
-    dash_speed      : f32,
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
     state           : PlayerState,
     stomp           : Stomp,
@@ -51,6 +50,7 @@ Dash :: struct {
     max_charges     : int,
     multiplier      : f32,
     recharge_time   : f32,
+    speed           : f32,
 }
 
 init_player :: proc() {
@@ -185,6 +185,10 @@ left_stomp :: proc (player: ^Player) {
 
     #reverse for i in sa.slice(&free_areas) {
         sa.unordered_remove(&game_ctx.collision_ctx.box_areas, i)
+    }
+
+    for &lb, idx in sa.slice(&game_ctx.collision_ctx.loot_boxes) {
+        stomp_loot(player, &lb, idx)
     }
 }
 

@@ -42,6 +42,12 @@ draw_frame :: proc(dt: f32, vdt: f32) {
         draw_health_box(&game_ctx.player, dt) 
         rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 16, 10.0, rl.WHITE)
         rl.DrawText(rl.TextFormat("Currency : %i", game_ctx.currency), 32, 48, 10.0, rl.WHITE)
+
+        for lb in sa.slice(&game_ctx.collision_ctx.loot_boxes) {
+            draw_pos := rl.GetWorldToScreen2D(lb.rect.xy, game_ctx.camera) + { -4, -8 }
+            if lb.cost > 0 { rl.DrawText(rl.TextFormat("$%i", lb.cost), i32(draw_pos.x), i32(draw_pos.y), 10, rl.WHITE) }
+        }
+
     rl.EndTextureMode()
 
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
@@ -63,11 +69,13 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
             }
         }
 
-        //Draw AOE Boxes
-        for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
-            draw_hitbox_pattern(&pattern)
+        //Draw loot boxes
+        for &lb in sa.slice(&game_ctx.collision_ctx.loot_boxes) {
+            lb.render.pos = lb.rect.xy
+            update_atlas_anim(&lb.render.anim, vdt)
+            draw_pixel_perfect_render(lb.render)
         }
-        
+ 
         // Draw Collision Bodies
         for body in sa.slice(&game_ctx.collision_ctx.static) { box_draw(body) }
         for body in sa.slice(&game_ctx.collision_ctx.box_areas) { box_draw(body) }
@@ -83,6 +91,11 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
             box_draw_at_pos(enemy.kb.box, kb_draw_pos)
             rl.DrawRectangleRec(rect_to_rectangle(enemy.attack_box.rect), fcolor_to_color(enemy.attack_box.current_color))
             enemy.attack_box.current_color = fade_color(enemy.attack_box.current_color, 20.0)
+        }
+
+        //Draw AOE Boxes
+        for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
+            draw_hitbox_pattern(&pattern)
         }
 
         //Draw Explosions

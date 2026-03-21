@@ -28,7 +28,9 @@ MAX_STATIC_BODIES :: 32
 MAX_BOX_BODIES :: 32
 
 CollisionContext :: struct {
+    free_lb     : sa.Small_Array(MAX_STATIC_BODIES, int),
     static      : sa.Small_Array(MAX_STATIC_BODIES, Box),
+    loot_boxes  : sa.Small_Array(MAX_STATIC_BODIES, Lootbox),
     box_areas   : sa.Small_Array(MAX_BOX_BODIES, Box),
     kick_boxes  : sa.Small_Array(MAX_BOX_BODIES, KinematicBody),
 }

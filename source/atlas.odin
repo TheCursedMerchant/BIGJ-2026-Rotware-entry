@@ -27,7 +27,7 @@ LETTERS_IN_FONT :: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz12345678
 
 // A generated square in the atlas you can use with rl.SetShapesTexture to make
 // raylib shapes such as rl.DrawRectangleRec() use the atlas.
-SHAPES_TEXTURE_RECT :: Rect {497, 148, 10, 10}
+SHAPES_TEXTURE_RECT :: Rect {253, 149, 10, 10}
 
 Texture_Name :: enum {
 	None,
@@ -67,6 +67,12 @@ Texture_Name :: enum {
 	Dash_Charge1,
 	Dash_Charge2,
 	Dash_Charge3,
+	Chest0,
+	Chest1,
+	Chest2,
+	Chest3,
+	Chest4,
+	Chest5,
 }
 
 Atlas_Texture :: struct {
@@ -118,10 +124,16 @@ atlas_textures: [Texture_Name]Atlas_Texture = {
 	.Player13 = { rect = {353, 120, 11, 20}, offset_top = 5, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player14 = { rect = {317, 120, 11, 20}, offset_top = 5, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player15 = { rect = {317, 141, 12, 17}, offset_top = 8, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
-	.Dash_Charge0 = { rect = {195, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Dash_Charge1 = { rect = {356, 149, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Dash_Charge2 = { rect = {253, 149, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Dash_Charge3 = { rect = {258, 149, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge0 = { rect = {223, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge1 = { rect = {228, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge2 = { rect = {363, 158, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge3 = { rect = {368, 158, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Chest0 = { rect = {153, 154, 16, 14}, offset_top = 1, offset_right = 0, offset_bottom = 1, offset_left = 0, document_size = {16, 16}, duration = 0.100},
+	.Chest1 = { rect = {136, 154, 16, 14}, offset_top = 1, offset_right = 0, offset_bottom = 1, offset_left = 0, document_size = {16, 16}, duration = 0.100},
+	.Chest2 = { rect = {170, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.600},
+	.Chest3 = { rect = {497, 148, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
+	.Chest4 = { rect = {185, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
+	.Chest5 = { rect = {200, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
 }
 
 Animation_Name :: enum {
@@ -133,6 +145,8 @@ Animation_Name :: enum {
 	Player_Idle_Left,
 	Dash_Charge_Disabled,
 	Dash_Charge_Enabled,
+	Chest_Closed,
+	Chest_Open,
 }
 
 Tag_Loop_Dir :: enum {
@@ -161,6 +175,8 @@ atlas_animations := [Animation_Name]Atlas_Animation {
 	.Player_Idle_Left = { first_frame = .Player12, last_frame = .Player15, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 	.Dash_Charge_Disabled = { first_frame = .Dash_Charge0, last_frame = .Dash_Charge1, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 	.Dash_Charge_Enabled = { first_frame = .Dash_Charge2, last_frame = .Dash_Charge3, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
+	.Chest_Closed = { first_frame = .Chest0, last_frame = .Chest1, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
+	.Chest_Open = { first_frame = .Chest2, last_frame = .Chest5, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 }
 
 Atlas_Glyph :: struct {
@@ -237,12 +253,12 @@ atlas_glyphs: []Atlas_Glyph = {
 	{ rect = {291, 1, 27, 38}, value = '?', offset_x = 5, offset_y = 0, advance_x = 37},
 	{ rect = {379, 81, 6, 38}, value = '!', offset_x = 5, offset_y = 0, advance_x = 16},
 	{ rect = {41, 1, 33, 38}, value = '&', offset_x = 5, offset_y = 0, advance_x = 42},
-	{ rect = {357, 142, 6, 6}, value = '.', offset_x = 5, offset_y = 31, advance_x = 16},
+	{ rect = {216, 155, 6, 6}, value = '.', offset_x = 5, offset_y = 31, advance_x = 16},
 	{ rect = {266, 142, 11, 17}, value = ',', offset_x = 5, offset_y = 26, advance_x = 21},
-	{ rect = {137, 155, 33, 6}, value = '_', offset_x = 5, offset_y = 37, advance_x = 42},
+	{ rect = {305, 160, 33, 6}, value = '_', offset_x = 5, offset_y = 37, advance_x = 42},
 	{ rect = {503, 81, 6, 22}, value = ':', offset_x = 5, offset_y = 10, advance_x = 16},
 	{ rect = {353, 81, 11, 38}, value = '[', offset_x = 5, offset_y = 0, advance_x = 21},
 	{ rect = {366, 81, 11, 38}, value = ']', offset_x = 5, offset_y = 0, advance_x = 21},
-	{ rect = {172, 155, 22, 6}, value = '-', offset_x = 5, offset_y = 21, advance_x = 32},
+	{ rect = {340, 160, 22, 6}, value = '-', offset_x = 5, offset_y = 21, advance_x = 32},
 	{ rect = {237, 121, 27, 27}, value = '+', offset_x = 5, offset_y = 5, advance_x = 37},
 }

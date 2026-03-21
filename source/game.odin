@@ -135,8 +135,10 @@ init_game_ctx :: proc() {
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
     game_ctx.active_areas = 0
+    game_ctx.difficulty_lvl = 1
     game_ctx.collision_ctx = new(CollisionContext) 
     game_ctx.wave_spawner = new(WaveSpawner)
+    game_ctx.wave_spawner.wave_count = 1
     alloc_game_data(game_ctx)
     init_global_timers()
     init_wave_spawner(game_ctx.wave_spawner, 0)
@@ -175,6 +177,8 @@ reset_level :: proc () {
 	}
     game_ctx.active_areas = 0
     game_ctx.currency = 0
+    game_ctx.difficulty_lvl = 1
+    game_ctx.wave_spawner.wave_count = 1
     alloc_game_data(game_ctx)
     init_global_timers()
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
@@ -262,6 +266,7 @@ update_global_timers :: proc(dt: f32) {
                 spawn_random_area(spawner)
             case .Spawn_Wave:
                 spawner := game_ctx.wave_spawner
+                spawner.wave_count += 1
                 if spawner.current_enemies + spawner.pack_size <= spawner.max_enemies {
                     start_timer(&game_ctx.timers[.Wave_Spawn_Enemy])
                 }
