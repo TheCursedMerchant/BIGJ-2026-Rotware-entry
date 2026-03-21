@@ -4,12 +4,9 @@ import la "core:math/linalg"
 import rl "vendor:raylib"
 import "core:log"
 
-RED :: [4]f32 { 255, 0, 0, 255 }
-GREEN :: [4]f32 { 0, 255, 0, 255 }
-BLUE :: [4]f32 { 0, 0, 255, 255 }
-WHITE :: [4]f32 { 255, 255, 255, 255 }
-
 EnemyState :: enum { Chase, Dead }
+
+EnemyKind :: enum { Chaser }
 
 Enemy :: struct {
     kb              : KinematicBody,
@@ -21,6 +18,7 @@ Enemy :: struct {
     attack_rate     : f32,
     attack_timer    : f32,
     state           : EnemyState,
+    kind            : EnemyKind,
 }
 
 HitBoxRender :: struct {
@@ -62,24 +60,43 @@ move_attack_player :: proc(enemy : ^Enemy) {
     }
 }
 
-basic_enemy_at_pos :: proc(pos : [2]int) -> Enemy {
+add_enemy_at_tile_pos :: proc(store : ^EnemyData, pos : [2]int, kind : EnemyKind = .Chaser) {
     raw_pos := arr_cast(pos * NATIVE_TILE_DIM, f32)
+    enemy := new_enemy(pos = raw_pos, kind = kind)
+    add_enemy(enemy, store)
+}
+
+new_chaser :: proc(pos: [2]f32 = {}) -> Enemy {
+    return new_enemy(pos, 1, 1, 24, 2.0, 4.0, {16, 16}, .Chaser)
+}
+
+new_enemy :: proc(
+    pos                 : [2]f32 = {},
+    health              : f32 = 1.0,
+    damage              : f32 = 1.0,
+    range               : f32 = 24.0,
+    rate                : f32 = 2.0,
+    mv_speed            : f32 = 4.0,
+    attack_box_size     : [2]f32 = { 16, 16 },
+    kind                : EnemyKind = .Chaser,
+) -> Enemy {
     return Enemy{
         kb = {
             box = {
-                rectangle = { raw_pos.x, raw_pos.y, 16, 16 },
+                rectangle = { pos.x, pos.y, 16, 16 },
                 colors = { .Primary = rl.PURPLE, .Secondary = rl.RED },
                 color = rl.PURPLE,
                 line_thickness = 1.0,
             },
         },
-        attack_box = { rect = { 0, 0, 16, 16 }, color = RED },
+        attack_box = { rect = { 0, 0, attack_box_size.x, attack_box_size.y }, color = RED },
         //render = { anim = create_atlas_anim(.Player_Idle_Down), pos = raw_pos },
-        health = 1.0,
-        damage = 1.0,
-        attack_range = 24.0,
-        attack_rate = 2.0,
-        speed = 4.0,
+        health = health,
+        damage = damage,
+        attack_range = range,
+        attack_rate = rate,
+        speed = mv_speed,
+        kind = kind,
     }
 }
 

@@ -2,20 +2,18 @@ package game
 import "core:math/rand"
 import "core:log"
 
-EnemyType :: enum { Base }
-
 WaveSpawner :: struct {
-    spawns          : [EnemyType]Enemy,
+    spawns          : [EnemyKind]Enemy,
     spawn_points    : [4][2]f32,
     pack_size       : int,
     current_enemies : int,
     max_enemies     : int,
     current_pack    : int,
+    next_spawn      : EnemyKind,
 }
 
 init_wave_spawner :: proc(ws : ^WaveSpawner, pack_size : int = 5, max_enemies : int = 20) {
-    enemy := basic_enemy_at_pos({})
-    ws.spawns[.Base] = enemy
+    ws.spawns[ws.next_spawn] = new_chaser()
     
     size := f32(NATIVE_TILE_DIM.x)
     dim := f32(SCENE_LEVEL_DIM.x - 1) 
@@ -32,13 +30,14 @@ init_wave_spawner :: proc(ws : ^WaveSpawner, pack_size : int = 5, max_enemies : 
 spawn_wave :: proc(spawner : ^WaveSpawner, enemies : ^EnemyData) {
     if spawner.current_pack < spawner.pack_size {
         spawn_point_idx := rand.int32_range(0, len(spawner.spawn_points))
-        next_spawn := spawner.spawns[.Base]
+        next_spawn := spawner.spawns[spawner.next_spawn]
         next_spawn.kb.box.rectangle.xy = spawner.spawn_points[spawn_point_idx]
         add_enemy(next_spawn, enemies)
         spawner.current_enemies += 1
         spawner.current_pack += 1
         start_timer(&game_ctx.timers[.Wave_Spawn_Enemy])
     } else {
+        game_ctx.difficulty_lvl += 1
         spawner.current_pack = 0
         if can_spawn(spawner) {
             start_timer(&game_ctx.timers[.Spawn_Wave])

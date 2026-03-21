@@ -6,6 +6,33 @@ import sa "core:container/small_array"
 import "core:log"
 
 BG_COLOR :: rl.Color{ 20, 30, 38, 255 }
+RED :: [4]f32 { 255, 0, 0, 255 }
+GREEN :: [4]f32 { 0, 255, 0, 255 }
+BLUE :: [4]f32 { 0, 0, 255, 255 }
+WHITE :: [4]f32 { 255, 255, 255, 255 }
+
+Render :: struct {
+    anim    : Animation,
+    pos     : [2]f32,
+    offset  : [2]f32,
+}
+
+ColorRender :: struct {
+    render : Render,
+    fcolor : [4]f32,
+}
+
+ChargeRenders :: struct {
+    ready           : Render,
+    inactive        : Render,
+}
+
+MeterRenderRect :: enum { Bg, Mid, Fg }
+MeterRender :: struct {
+    rects   : [MeterRenderRect]Rectangle,
+    colors  : [MeterRenderRect]rl.Color,
+    per     : f32,
+}
 
 draw_frame :: proc(dt: f32, vdt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
