@@ -79,14 +79,13 @@ spawn_loot :: proc() {
        modifier = global_player_mods[PlayerModKind(drop)],
        rect = loot_rect,
        render = { anim = create_atlas_anim(.Chest_Closed) },
-       cost = 50 * game_ctx.difficulty_lvl,
+       cost = 35 * game_ctx.difficulty_lvl,
     }
 
     if ctx.free_lb.len > 0 {
         next_idx := sa.pop_back(&ctx.free_lb)
         ctx.loot_boxes.data[next_idx] = n_loot
     } else {
-        log.debugf("Spawning loot : %v", n_loot)
         sa.append(&ctx.loot_boxes, n_loot)
     }
 

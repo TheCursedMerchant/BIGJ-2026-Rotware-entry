@@ -11,6 +11,7 @@ EnemyKind :: enum { Chaser }
 Enemy :: struct {
     kb              : KinematicBody,
     attack_box      : HitBoxRender,
+    currency_value  : int,
     speed           : f32,
     health          : f32,
     damage          : f32,
@@ -67,11 +68,12 @@ add_enemy_at_tile_pos :: proc(store : ^EnemyData, pos : [2]int, kind : EnemyKind
 }
 
 new_chaser :: proc(pos: [2]f32 = {}) -> Enemy {
-    return new_enemy(pos, 1, 1, 24, 2.0, 4.0, {16, 16}, .Chaser)
+    return new_enemy(pos, 2, 1, 1, 24, 2.0, 4.0, {16, 16}, .Chaser)
 }
 
 new_enemy :: proc(
     pos                 : [2]f32 = {},
+    currency_value      : int = 2,
     health              : f32 = 1.0,
     damage              : f32 = 1.0,
     range               : f32 = 24.0,
@@ -103,6 +105,7 @@ new_enemy :: proc(
 kill_enemy :: proc(idx: int, data : ^EnemyData) {
     shake_cam(KICK_SHAKE_INTENSITY)
     enemy := &game_ctx.enemies.active[idx]
+    game_ctx.currency += enemy.currency_value
     enemy^ = Enemy{ state = .Dead }
     append(&data.dead, idx)
     spawner := game_ctx.wave_spawner
@@ -115,7 +118,6 @@ kill_enemy :: proc(idx: int, data : ^EnemyData) {
 
 add_enemy :: proc(enemy: Enemy, data: ^EnemyData) {
     if len(data.dead) > 0 {
-        log.debug("Reactivating dead entity!")
         next_idx := pop(&data.dead)
         data.active[next_idx] = enemy
         data.active[next_idx].kb.prev_pos = enemy.kb.box.rectangle.xy

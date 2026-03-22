@@ -135,13 +135,12 @@ init_game_ctx :: proc() {
         shake = { fall_off = FALL_OFF_THRESHHOLD }
 	}
     game_ctx.active_areas = 0
-    game_ctx.difficulty_lvl = 1
     game_ctx.collision_ctx = new(CollisionContext) 
     game_ctx.wave_spawner = new(WaveSpawner)
     game_ctx.wave_spawner.wave_count = 1
     alloc_game_data(game_ctx)
     init_global_timers()
-    init_wave_spawner(game_ctx.wave_spawner, 0)
+    init_wave_spawner(game_ctx.wave_spawner)
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
     // Init timers and spawn data
     single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
@@ -151,13 +150,12 @@ init_game_ctx :: proc() {
 
 alloc_game_data :: proc(ctx: ^Context) {
     game_ctx.enemies = new(EnemyData, main_allocator)
-    game_ctx.enemies.active = make([dynamic]Enemy, 0, 32, main_allocator)
-    game_ctx.enemies.dead = make([dynamic]int, 0, main_allocator)
+    game_ctx.enemies.active = make([dynamic]Enemy, 0, 128, main_allocator)
+    game_ctx.enemies.dead = make([dynamic]int, 0, 128, main_allocator)
     game_ctx.pattern_master = new(HitboxPatternMaster, main_allocator)
 }
 
 reset_level :: proc () {
-    log.debug("Resetting game!")
     free_all(context.temp_allocator)
     free_all(main_allocator)
     init_player()
@@ -177,8 +175,7 @@ reset_level :: proc () {
 	}
     game_ctx.active_areas = 0
     game_ctx.currency = 0
-    game_ctx.difficulty_lvl = 1
-    game_ctx.wave_spawner.wave_count = 1
+    init_wave_spawner(game_ctx.wave_spawner)
     alloc_game_data(game_ctx)
     init_global_timers()
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
@@ -293,7 +290,7 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
             explosion.rect = kb.box.rectangle
             explosion.rect.zw *= 5.0
             explosion.rect.xy = get_rect_center(kb.box.rectangle) - (explosion.rect.zw / 2.0)
-            explosion.damage = kb.box.active_dam * 5
+            explosion.damage = kb.box.active_dam
             explosion.color = RED
             start_timer(&explosion.timer)
             sa.append(&game_ctx.explosion_rects, explosion)
@@ -309,11 +306,11 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
 
 explode_kickbox :: proc(kb: ^KinematicBody) {
     stop_timer(&kb.timer)
-    explosion := Explosion { timer = { duration = 0.2 } }
+    explosion := Explosion { timer = { duration = 0.1 } }
     explosion.rect = kb.box.rectangle
     explosion.rect.zw *= 5.0
     explosion.rect.xy = get_rect_center(kb.box.rectangle) - (explosion.rect.zw / 2.0)
-    explosion.damage = kb.box.active_dam * 5
+    explosion.damage = kb.box.active_dam
     explosion.color = RED
     start_timer(&explosion.timer)
     sa.append(&game_ctx.explosion_rects, explosion)
@@ -477,6 +474,26 @@ load_atlased_font :: proc(atlas: Texture) -> Font {
 		recs = raw_data(font_rects),
 		glyphs = raw_data(glyphs),
 	}
+}
+
+progress_difficulty :: proc(val : int) {
+    game_ctx.difficulty_lvl += val
+    switch game_ctx.difficulty_lvl % 4 {
+        case 0 :
+            log.debugf("Difficulty : %v, increasing wave count", game_ctx.difficulty_lvl)
+            game_ctx.wave_spawner.max_waves += 1
+        case 1 : 
+            log.debugf("Difficulty : %v, increasing wave size", game_ctx.difficulty_lvl)
+            game_ctx.wave_spawner.max_enemies += 1
+            game_ctx.wave_spawner.pack_size += 1
+        case 2 :
+            log.debugf("Difficulty : %v, upgrading spawns", game_ctx.difficulty_lvl)
+            game_ctx.timers[.Spawn_Wave].duration -= 1.0
+            upgrade_spawns(game_ctx.wave_spawner)
+        case 3 : 
+            log.debugf("Difficulty : %v, spawning loot!", game_ctx.difficulty_lvl)
+            spawn_loot()
+    }
 }
 
 // Utils

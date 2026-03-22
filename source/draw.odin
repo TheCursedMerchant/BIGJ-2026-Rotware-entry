@@ -35,6 +35,8 @@ MeterRender :: struct {
 }
 
 draw_frame :: proc(dt: f32, vdt: f32) {
+	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
+    screen_center := screen_dim / 2
     rl.BeginTextureMode(game_ctx.level_render)
 	    rl.ClearBackground(rl.BLACK)
         paint_lvl_texture(dt, vdt)
@@ -42,7 +44,7 @@ draw_frame :: proc(dt: f32, vdt: f32) {
         draw_health_box(&game_ctx.player, dt) 
         rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 16, 10.0, rl.WHITE)
         rl.DrawText(rl.TextFormat("Currency : %i", game_ctx.currency), 32, 48, 10.0, rl.WHITE)
-
+        rl.DrawText(rl.TextFormat("Difficulty : %i", game_ctx.difficulty_lvl), 32, 64, 10.0, rl.WHITE)
         for lb in sa.slice(&game_ctx.collision_ctx.loot_boxes) {
             draw_pos := rl.GetWorldToScreen2D(lb.rect.xy, game_ctx.camera) + { -4, -8 }
             if lb.cost > 0 { rl.DrawText(rl.TextFormat("$%i", lb.cost), i32(draw_pos.x), i32(draw_pos.y), 10, rl.WHITE) }
@@ -50,7 +52,6 @@ draw_frame :: proc(dt: f32, vdt: f32) {
 
     rl.EndTextureMode()
 
-	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
 	src_rect := rl.Rectangle{0, 0, f32(game_ctx.level_render.texture.width), f32(-game_ctx.level_render.texture.height)}
 	dest_rect := rl.Rectangle{0, 0, f32(screen_dim.x), f32(screen_dim.y)}
 

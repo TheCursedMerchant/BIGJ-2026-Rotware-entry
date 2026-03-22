@@ -45,9 +45,7 @@ update_camera :: proc (dt: f32) {
 }
 
 update_camera_zoom :: proc(delta: f32) {
-    log.debugf("Delta : %v", delta)
     game_ctx.camera.target_zoom += delta
-    log.debugf("Camera target zoom : %v", game_ctx.camera.target_zoom)
     game_ctx.camera.zooming = true
 }
 

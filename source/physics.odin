@@ -301,7 +301,6 @@ move_active_kickbox :: proc(
     #reverse for idx in sa.slice(&collider_idxs) {
         if idx != kb_idx do explode_kickbox(&ctx.kick_boxes.data[idx])
         sa.unordered_remove(&ctx.kick_boxes, idx) 
-        //ctx.kick_boxes.data[idx].vel = origin_vel * 1.5
     }
 }
 
