@@ -6,6 +6,7 @@ ActionInputKind :: enum {
     Left_Stomp,
     Right_Stomp,
     Dash,
+    Pause,
 }
 
 ActionInput :: struct {
@@ -39,6 +40,7 @@ action_inputs := [ActionInputKind]ActionInput {
     .Left_Stomp = { .H, .Left_Stomp },
     .Right_Stomp = { .J, .Right_Stomp },
     .Dash = { .K, .Dash },
+    .Pause = { .ENTER, .Pause }
 }
 
 // TODO: Add versions that take regular inputs that don't 

@@ -73,6 +73,10 @@ Texture_Name :: enum {
 	Chest3,
 	Chest4,
 	Chest5,
+	Health_Pick_Up0,
+	Health_Pick_Up1,
+	Health_Pick_Up2,
+	Health_Pick_Up3,
 }
 
 Atlas_Texture :: struct {
@@ -124,16 +128,20 @@ atlas_textures: [Texture_Name]Atlas_Texture = {
 	.Player13 = { rect = {353, 120, 11, 20}, offset_top = 5, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player14 = { rect = {317, 120, 11, 20}, offset_top = 5, offset_right = 11, offset_bottom = 7, offset_left = 10, document_size = {32, 32}, duration = 0.100},
 	.Player15 = { rect = {317, 141, 12, 17}, offset_top = 8, offset_right = 11, offset_bottom = 7, offset_left = 9, document_size = {32, 32}, duration = 0.100},
-	.Dash_Charge0 = { rect = {223, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Dash_Charge1 = { rect = {228, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Dash_Charge2 = { rect = {363, 158, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Dash_Charge3 = { rect = {368, 158, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
-	.Chest0 = { rect = {153, 154, 16, 14}, offset_top = 1, offset_right = 0, offset_bottom = 1, offset_left = 0, document_size = {16, 16}, duration = 0.100},
-	.Chest1 = { rect = {136, 154, 16, 14}, offset_top = 1, offset_right = 0, offset_bottom = 1, offset_left = 0, document_size = {16, 16}, duration = 0.100},
-	.Chest2 = { rect = {170, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.600},
+	.Dash_Charge0 = { rect = {260, 160, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge1 = { rect = {230, 154, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge2 = { rect = {230, 159, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Dash_Charge3 = { rect = {265, 160, 4, 4}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {4, 4}, duration = 0.100},
+	.Chest0 = { rect = {136, 154, 16, 14}, offset_top = 1, offset_right = 0, offset_bottom = 1, offset_left = 0, document_size = {16, 16}, duration = 0.100},
+	.Chest1 = { rect = {153, 154, 16, 14}, offset_top = 1, offset_right = 0, offset_bottom = 1, offset_left = 0, document_size = {16, 16}, duration = 0.100},
+	.Chest2 = { rect = {200, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.600},
 	.Chest3 = { rect = {497, 148, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
-	.Chest4 = { rect = {185, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
-	.Chest5 = { rect = {200, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
+	.Chest4 = { rect = {170, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
+	.Chest5 = { rect = {185, 154, 14, 13}, offset_top = 2, offset_right = 1, offset_bottom = 1, offset_left = 1, document_size = {16, 16}, duration = 0.100},
+	.Health_Pick_Up0 = { rect = {253, 160, 6, 6}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {6, 6}, duration = 0.700},
+	.Health_Pick_Up1 = { rect = {370, 158, 6, 6}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {6, 6}, duration = 0.100},
+	.Health_Pick_Up2 = { rect = {363, 158, 6, 6}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {6, 6}, duration = 0.100},
+	.Health_Pick_Up3 = { rect = {223, 154, 6, 6}, offset_top = 0, offset_right = 0, offset_bottom = 0, offset_left = 0, document_size = {6, 6}, duration = 0.100},
 }
 
 Animation_Name :: enum {
@@ -147,6 +155,7 @@ Animation_Name :: enum {
 	Dash_Charge_Enabled,
 	Chest_Closed,
 	Chest_Open,
+	Health_Pick_Up_Idle,
 }
 
 Tag_Loop_Dir :: enum {
@@ -177,6 +186,7 @@ atlas_animations := [Animation_Name]Atlas_Animation {
 	.Dash_Charge_Enabled = { first_frame = .Dash_Charge2, last_frame = .Dash_Charge3, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 	.Chest_Closed = { first_frame = .Chest0, last_frame = .Chest1, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 	.Chest_Open = { first_frame = .Chest2, last_frame = .Chest5, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
+	.Health_Pick_Up_Idle = { first_frame = .Health_Pick_Up0, last_frame = .Health_Pick_Up3, loop_direction = .Forward, repeat = 0, document_size = {0, 0} },
 }
 
 Atlas_Glyph :: struct {

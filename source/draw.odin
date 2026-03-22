@@ -40,7 +40,6 @@ draw_frame :: proc(dt: f32, vdt: f32) {
     rl.BeginTextureMode(game_ctx.level_render)
 	    rl.ClearBackground(rl.BLACK)
         paint_lvl_texture(dt, vdt)
-        rl.DrawFPS(rl.GetScreenWidth() - 32, 16)
         draw_health_box(&game_ctx.player, dt) 
         rl.DrawText(rl.TextFormat("%.2f", game_ctx.timers[.Spawn_Wave].time_left), 32, 16, 10.0, rl.WHITE)
         rl.DrawText(rl.TextFormat("Currency : %i", game_ctx.currency), 32, 48, 10.0, rl.WHITE)
@@ -57,6 +56,8 @@ draw_frame :: proc(dt: f32, vdt: f32) {
 
     rl.BeginDrawing()
 	    rl.DrawTexturePro(game_ctx.level_render.texture, src_rect, dest_rect, {}, 0.0, rl.WHITE)
+        rl.DrawFPS(rl.GetScreenWidth() - 128, 16)
+        if game_ctx.menu.show do draw_menu_buttons()
     rl.EndDrawing()
 }
 
@@ -75,6 +76,11 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
             lb.render.pos = lb.rect.xy
             update_atlas_anim(&lb.render.anim, vdt)
             draw_pixel_perfect_render(lb.render)
+        }
+
+        for &p in sa.slice(&game_ctx.collision_ctx.health_pickups) {
+            p.render.pos = p.rect.xy
+            draw_pixel_perfect_render(p.render)
         }
  
         // Draw Collision Bodies
@@ -161,6 +167,17 @@ draw_pixel_perfect_render :: proc(render: Render, tint: rl.Color = rl.WHITE) {
         game_ctx.atlas,
         tint,
     )
+}
+
+draw_menu_buttons :: proc() {
+    menu := game_ctx.menu
+    btn_rect : rl.Rectangle
+    for button in menu.buttons {
+        btn_rect = rect_to_rectangle(button.rect)
+        rl.DrawRectangleRec(btn_rect, button.primary_color)
+        rl.DrawRectangleLinesEx(btn_rect, 1.0, button.secondary_color)
+        rl.DrawText(rl.TextFormat("%s", button.text), i32(btn_rect.x), i32(btn_rect.y), 10, button.text_color)
+    }
 }
 
 draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atlas: Texture, tint: rl.Color) {

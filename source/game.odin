@@ -27,9 +27,10 @@ Rect :: rl.Rectangle
 GlyphInfo :: rl.GlyphInfo
 RenderTexture :: rl.RenderTexture2D
 Camera :: rl.Camera2D
-
+InputMode :: enum { Play, Menu }
 Context :: struct {
     timers                  : [TimerTag]Timer,
+    abs_timers              : [AbsoluteTimerTag]Timer,
     explosion_rects         : sa.Small_Array(16, Explosion),
     level_render            : RenderTexture,
     atlas                   : Texture,
@@ -38,14 +39,33 @@ Context :: struct {
     camera                  : FollowCamera,
     update_timer            : f32,
     res_scale_factor        : f32,
+    time_scale              : f32,
     currency                : int,
     active_areas            : int,
     difficulty_lvl          : int,
+    input_mode              : InputMode,
+    menu                    : ^Menu,
     pattern_master          : ^HitboxPatternMaster,
     enemies                 : ^EnemyData,
     level                   : ^Level,
     collision_ctx           : ^CollisionContext,
     wave_spawner            : ^WaveSpawner,
+}
+
+PauseMenuButtonKind :: enum { Continue, Restart }
+Menu :: struct {
+    buttons                 : [PauseMenuButtonKind]MenuButton,
+    display_buttons         : []MenuButton,
+    show                    : bool,
+}
+
+MenuButton :: struct {
+    rect            : Rectangle,
+    primary_color   : rl.Color,
+    secondary_color : rl.Color,
+    text_color      : rl.Color,
+    text            : string,
+    kind            : PauseMenuButtonKind,
 }
 
 Explosion :: struct {
@@ -64,6 +84,11 @@ TimerTag :: enum {
     Player_Damaged,
     Spawn_Wave,
     Wave_Spawn_Enemy,
+}
+
+// For Timers that ignore the time scale
+AbsoluteTimerTag :: enum {
+    Hit_Stop,
 }
 
 Timer :: struct {
@@ -137,7 +162,30 @@ init_game_ctx :: proc() {
     game_ctx.active_areas = 0
     game_ctx.collision_ctx = new(CollisionContext) 
     game_ctx.wave_spawner = new(WaveSpawner)
+    game_ctx.menu = new(Menu)
     game_ctx.wave_spawner.wave_count = 1
+    game_ctx.time_scale = 1.0
+
+    screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
+    screen_center := arr_cast(([2]i32{ screen_dim.x, screen_dim.y } / 2), f32)
+    game_ctx.menu.buttons = {
+        .Continue = {
+            rect = { screen_center.x, screen_center.y - 32,  128, 16 },
+            text = "Continue",
+            primary_color = rl.BLACK,
+            secondary_color = rl.WHITE,
+            text_color = rl.WHITE,
+            kind = .Continue,
+        },
+        .Restart = {
+            rect = { screen_center.x, screen_center.y, 128, 16 },
+            text = "Restart",
+            primary_color = rl.BLACK,
+            secondary_color = rl.WHITE,
+            text_color = rl.WHITE,
+            kind = .Restart,
+        },
+    }
     alloc_game_data(game_ctx)
     init_global_timers()
     init_wave_spawner(game_ctx.wave_spawner)
@@ -160,7 +208,6 @@ reset_level :: proc () {
     free_all(main_allocator)
     init_player()
     game_ctx.collision_ctx^ = CollisionContext{}
-    game_ctx.wave_spawner.current_enemies = 0
     center_cell := SCENE_LEVEL_DIM.x / 2
     level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
     screen_res := arr_cast(TARGET_RES, f32)
@@ -175,44 +222,57 @@ reset_level :: proc () {
 	}
     game_ctx.active_areas = 0
     game_ctx.currency = 0
-    init_wave_spawner(game_ctx.wave_spawner)
+    game_ctx.time_scale = 1.0
+    game_ctx.menu.show = false
+    game_ctx.difficulty_lvl = 0
     alloc_game_data(game_ctx)
+    init_wave_spawner(game_ctx.wave_spawner)
+
+    for &timer in game_ctx.timers { stop_timer(&timer) }
+    for &timer in game_ctx.abs_timers { stop_timer(&timer) }
     init_global_timers()
-    spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
+
     start_global_timers()
+    spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
 }
 
+// NOTE : Raw Frame Time is time it took to draw the previous frame
+// dt Is Raw Frame Time scaled by the game's timescale factor (mainly for hit stop)
+// FIXED_TIME_STEP is the rate we want to update the physics checks
 update :: proc() {
     if rl.IsKeyPressed(.R) { reset_level() }
-    dt := rl.GetFrameTime()
-    game_ctx.update_timer += dt
-    
-    update_global_timers(dt)
-    for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
-        update_hitbox_pattern_timers(&pattern, dt)
-    }
+    raw_frame_time := rl.GetFrameTime()
+    dt := raw_frame_time * game_ctx.time_scale
+    switch game_ctx.input_mode {
+        case .Play:
+            game_ctx.update_timer += dt 
+            update_global_abs_timers(raw_frame_time)
+            update_global_timers(dt)
+            for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
+                update_hitbox_pattern_timers(&pattern, dt)
+            }
 
-    update_kickbox_timers(game_ctx.collision_ctx, &game_ctx.player, dt)
-    update_explosion_timers(dt)
+            update_kickbox_timers(game_ctx.collision_ctx, &game_ctx.player, dt)
+            update_explosion_timers(dt)
 
-    // TODO: Remove testing only
-    if rl.IsKeyPressed(.N) {
-        log.debug("Increasing zoom!")
-        update_camera_zoom(1.0)
-    } else if rl.IsKeyPressed(.M) {
-        log.debug("Decreasing zoom!")
-        update_camera_zoom(-1.0)
-    }
-
-    handle_player_input(FIXED_TIME_STEP)
-
-    for game_ctx.update_timer >= FIXED_TIME_STEP {
-        for &enemy in game_ctx.enemies.active {
-            enemy.attack_timer -= FIXED_TIME_STEP
-            run_state_basic(&enemy)
-        }
-        game_ctx.update_timer -= FIXED_TIME_STEP
-        physics_update(FIXED_TIME_STEP)
+            // TODO: Remove testing only
+            if rl.IsKeyPressed(.N) {
+                update_camera_zoom(1.0)
+            } else if rl.IsKeyPressed(.M) {
+                game_ctx.time_scale = 1.0
+                update_camera_zoom(-1.0)
+            }
+            handle_player_input()
+            for game_ctx.update_timer >= FIXED_TIME_STEP {
+                for &enemy in game_ctx.enemies.active {
+                    enemy.attack_timer -= FIXED_TIME_STEP
+                    run_state_basic(&enemy)
+                }
+                game_ctx.update_timer -= FIXED_TIME_STEP
+                physics_update(FIXED_TIME_STEP)
+            }
+        case .Menu : 
+            handle_menu_input(game_ctx.menu)
     }
 
     interpolated_dt := game_ctx.update_timer / FIXED_TIME_STEP
@@ -230,6 +290,7 @@ init_global_timers :: proc() {
     game_ctx.timers[.Player_Damaged] = { duration = 1.0 }
     game_ctx.timers[.Spawn_Wave] = { duration = 20.0 }
     game_ctx.timers[.Wave_Spawn_Enemy] = { duration = 0.8 }
+    game_ctx.abs_timers[.Hit_Stop] = { duration = 0.15 }
 }
 
 start_global_timers :: proc() {
@@ -278,6 +339,19 @@ update_global_timers :: proc(dt: f32) {
                     start_timer(&game_ctx.timers[.Player_Dash], game_ctx.player.dash.recharge_time)
                 }
             case .Player_Stomp: // Noop
+        }
+    }
+}
+
+update_global_abs_timers :: proc(dt: f32) {
+    complete_timers : sa.Small_Array(16, AbsoluteTimerTag)
+    for &timer, idx in game_ctx.abs_timers { 
+        if update_timer(&timer, dt) do sa.append(&complete_timers, AbsoluteTimerTag(idx))
+    }
+ 
+    for tag in sa.slice(&complete_timers) {
+        switch tag {
+            case .Hit_Stop: game_ctx.time_scale = 1.0
         }
     }
 }
@@ -342,11 +416,44 @@ update_active_areas :: proc(delta : int) {
     }
 }
 
-handle_player_input :: proc(dt: f32) {
+handle_player_input :: proc() {
+    if is_input_pressed(action_inputs[.Pause]) {
+        game_ctx.menu.show = true
+        game_ctx.input_mode = .Menu
+        game_ctx.menu.display_buttons = { game_ctx.menu.buttons[.Continue], game_ctx.menu.buttons[.Restart] }
+        return
+    }
+
     player := &game_ctx.player
     switch player.state {
         case .Idle: handle_player_idle(player)
         case .Dash: handle_player_dash(player)
+    }
+}
+
+//NOTE: If The both display buttons are active then we are in the pause menu
+handle_menu_input :: proc(menu: ^Menu) {
+    mouse_pos := rl.GetMousePosition()
+    if rl.IsMouseButtonPressed(.LEFT) {
+        for button in menu.buttons {
+            if pos_in_rect(mouse_pos, button.rect) {
+                switch button.kind {
+                    case .Continue:
+                        log.debug("Continue Clicked!")
+                        game_ctx.menu.show = false
+                        game_ctx.input_mode = .Play
+                        break
+                    case .Restart: 
+                        log.debug("Restart Clicked!")
+                        game_ctx.input_mode = .Play
+                        reset_level()
+                        break
+                }
+            }
+        }
+    } else if is_input_pressed(action_inputs[.Pause]) && len(menu.display_buttons) == 2 {
+        game_ctx.menu.show = false
+        game_ctx.input_mode = .Play
     }
 }
 
@@ -369,7 +476,7 @@ update_timer :: proc(timer: ^Timer, dt: f32) -> (complete: bool) {
     if !timer.running do return false
     timer.time_left -= dt
     if timer.time_left <= 0 {
-        timer.running = false
+        stop_timer(timer)
         return true
     }
     return false
@@ -435,6 +542,10 @@ parent_window_size_changed :: proc(w, h: int) {
     screen_res := arr_cast(TARGET_RES, f32)
     scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
     game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
+
+    screen_center := arr_cast(([2]int{ w, h } / 2), f32)
+    game_ctx.menu.buttons[.Continue].rect = { screen_center.x, screen_center.y - 32,  16, 16 }
+    game_ctx.menu.buttons[.Restart].rect = { screen_center.x, screen_center.y,  16, 16 }
 }
 
 shutdown :: proc() {
@@ -540,4 +651,9 @@ calc_box_rect :: proc(pos : [2]f32 = {}, size := [2]int{ 1, 1 }) -> Rectangle {
 
 vec_comp_in_range :: proc(a, b : [2]$T) -> bool {
     return a.x < b.x && a.y < b.y
+}
+
+pos_in_rect :: proc(pos: [2]f32, rect: Rectangle) -> bool {
+    log.debugf("Checking Pos in rect : %v | %v", pos, rect)
+    return (pos.x >= rect.x) && (pos.x <= rect.x + rect.z) && (pos.y >= rect.y) && (pos.y <= rect.y + rect.w)
 }

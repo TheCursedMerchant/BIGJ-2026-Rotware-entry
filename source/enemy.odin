@@ -2,6 +2,8 @@ package game
 
 import la "core:math/linalg"
 import rl "vendor:raylib"
+import sa "core:container/small_array"
+import "core:math/rand"
 import "core:log"
 
 EnemyState :: enum { Chase, Dead }
@@ -18,6 +20,7 @@ Enemy :: struct {
     attack_range    : f32,
     attack_rate     : f32,
     attack_timer    : f32,
+    drop_chance     : f32,
     state           : EnemyState,
     kind            : EnemyKind,
 }
@@ -32,6 +35,12 @@ HitBoxRender :: struct {
 EnemyData :: struct {
     active  : [dynamic]Enemy,
     dead    : [dynamic]int,
+}
+
+HealthPickUp :: struct {
+    render  : Render,
+    rect    : Rectangle,
+    amount  : f32,
 }
 
 run_state_basic :: proc(enemy: ^Enemy) {
@@ -68,7 +77,7 @@ add_enemy_at_tile_pos :: proc(store : ^EnemyData, pos : [2]int, kind : EnemyKind
 }
 
 new_chaser :: proc(pos: [2]f32 = {}) -> Enemy {
-    return new_enemy(pos, 2, 1, 1, 24, 2.0, 4.0, {16, 16}, .Chaser)
+    return new_enemy(pos, 2, 1, 1, 24, 2.0, 4.0, 0.1, {16, 16}, .Chaser)
 }
 
 new_enemy :: proc(
@@ -79,6 +88,7 @@ new_enemy :: proc(
     range               : f32 = 24.0,
     rate                : f32 = 2.0,
     mv_speed            : f32 = 4.0,
+    drop_chance         : f32 = 0.1,
     attack_box_size     : [2]f32 = { 16, 16 },
     kind                : EnemyKind = .Chaser,
 ) -> Enemy {
@@ -98,6 +108,7 @@ new_enemy :: proc(
         attack_range = range,
         attack_rate = rate,
         speed = mv_speed,
+        drop_chance = drop_chance,
         kind = kind,
     }
 }
@@ -106,6 +117,10 @@ kill_enemy :: proc(idx: int, data : ^EnemyData) {
     shake_cam(KICK_SHAKE_INTENSITY)
     enemy := &game_ctx.enemies.active[idx]
     game_ctx.currency += enemy.currency_value
+
+    roll := rand.float32_range(0.0, 1.0)
+    if roll < enemy.drop_chance do drop_health_pick_up_pos(1.0, enemy.kb.box.rectangle.xy)
+
     enemy^ = Enemy{ state = .Dead }
     append(&data.dead, idx)
     spawner := game_ctx.wave_spawner
@@ -129,5 +144,14 @@ add_enemy :: proc(enemy: Enemy, data: ^EnemyData) {
 damage_lethal :: proc(enemy: ^Enemy, dam : f32) -> bool {
     enemy.health -= dam
     return enemy.health <= 0
+}
+
+drop_health_pick_up_pos :: proc(val : f32, pos: [2]f32) {
+    health_p := HealthPickUp {
+        amount = val,
+        render = { anim = create_atlas_anim(.Health_Pick_Up_Idle) },
+        rect = { pos.x, pos.y, 6, 6 },
+    }
+    sa.append(&game_ctx.collision_ctx.health_pickups, health_p)
 }
 

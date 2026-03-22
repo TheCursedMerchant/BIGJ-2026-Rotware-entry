@@ -162,14 +162,13 @@ left_stomp :: proc (player: ^Player) {
     free_kbs : sa.Small_Array(16, int)
     for &kb, idx in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
         if rectangle_overlap(player.stomp.hitbox.rect, kb.box.rectangle) {
-            update_currency(10)
+            consume_area(10)
             stop_timer(&kb.timer)
             sa.append(&free_kbs, idx)
         }
     }
 
     #reverse for i in sa.slice(&free_kbs) {
-        update_active_areas(-1)
         sa.unordered_remove(&game_ctx.collision_ctx.kick_boxes, i)
     }
 
@@ -247,7 +246,11 @@ damage_player :: proc(player: ^Player, value : f32) {
         player.prev_health = player.health
         player.health -= value
         player.options += { .Damaged }
-        if player.health <= 0 { log.debug("Player died!") }
+        if player.health <= 0 { 
+            log.debug("Player died!") 
+            game_ctx.menu.show = true
+            game_ctx.menu.display_buttons = { game_ctx.menu.buttons[.Restart] }
+        }
         shake_cam(32.0)
         start_timer(&game_ctx.timers[.Player_Damaged])
     }

@@ -134,7 +134,7 @@ box_set_size_kb :: proc(box: ^Box, size : [2]int, player_rect : Rectangle, k_bod
         }
 
         for &e, idx in game_ctx.enemies.active {
-            if rectangle_overlap(e.kb.box.rectangle, box.rectangle){
+            if rectangle_overlap(e.kb.box.rectangle, box.rectangle) {
                 kill_enemy(idx, game_ctx.enemies)
             }
         }
@@ -168,9 +168,8 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
     box_set_size_kb(box, size, player_rect, sa.slice(&ctx.kick_boxes))
     if box.tile_size == { 1, 1 } {
         if rectangle_overlap(box.rectangle, player_rect) {
-            update_currency(10)
-            update_active_areas(-1)
             log.debugf("Eating kickbox!")
+            consume_area(10)
         } else {
             kick_box := KinematicBody {
                 box = {
@@ -187,6 +186,11 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
         }
         clear_box(box)
     }
+}
+
+consume_area :: proc(currency : int) {
+    update_currency(currency)
+    update_active_areas(-1)
 }
 
 clear_box :: proc(box: ^Box) {

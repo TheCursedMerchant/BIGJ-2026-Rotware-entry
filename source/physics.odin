@@ -28,11 +28,12 @@ MAX_STATIC_BODIES :: 32
 MAX_BOX_BODIES :: 32
 
 CollisionContext :: struct {
-    free_lb     : sa.Small_Array(MAX_STATIC_BODIES, int),
-    static      : sa.Small_Array(MAX_STATIC_BODIES, Box),
-    loot_boxes  : sa.Small_Array(MAX_STATIC_BODIES, Lootbox),
-    box_areas   : sa.Small_Array(MAX_BOX_BODIES, Box),
-    kick_boxes  : sa.Small_Array(MAX_BOX_BODIES, KinematicBody),
+    free_lb         : sa.Small_Array(MAX_STATIC_BODIES, int),
+    static          : sa.Small_Array(MAX_STATIC_BODIES, Box),
+    loot_boxes      : sa.Small_Array(MAX_STATIC_BODIES, Lootbox),
+    health_pickups  : sa.Small_Array(MAX_STATIC_BODIES, HealthPickUp),
+    box_areas       : sa.Small_Array(MAX_BOX_BODIES, Box),
+    kick_boxes      : sa.Small_Array(MAX_BOX_BODIES, KinematicBody),
 }
 
 add_area_box :: proc(
@@ -48,11 +49,13 @@ add_area_box :: proc(
 }
 
 move_axis :: proc(
-    kb          : ^KinematicBody,
-    colliders   : ^sa.Small_Array(16, int),
-    solids      : []Box,
-    k_bodies    : []KinematicBody,
-    axis_vec    : [2]f32,
+    kb                  : ^KinematicBody,
+    colliders           : ^sa.Small_Array(16, int),
+    pick_up_colliders   : ^sa.Small_Array(16, int),
+    axis_vec            : [2]f32,
+    solids              : []Box = {},
+    k_bodies            : []KinematicBody = {},
+    pick_ups            : []HealthPickUp = {},
 ) {
     axis_vel := axis_vec * kb.vel 
     axis_remainder := axis_vec * kb.remainder
@@ -83,6 +86,12 @@ move_axis :: proc(
                         has_collision = true
                         sa.append(colliders, idx)
                         break
+                    }
+                }
+
+                for p, idx in pick_ups {
+                    if aabb_collision(test_rect, p.rect) {
+                        sa.append(pick_up_colliders, idx)
                     }
                 }
 
@@ -251,9 +260,23 @@ get_axis :: proc(vec: [2]f32) -> f32 {
 move_player :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f32) {
     solids := sa.slice(&ctx.static)
     k_bodies := sa.slice(&ctx.kick_boxes)
+    pick_ups := sa.slice(&ctx.health_pickups)
     collider_idxs : sa.Small_Array(16, int)
-    move_axis(kb, &collider_idxs, solids, k_bodies, { 1.0, 0.0 })
-    move_axis(kb, &collider_idxs, solids, k_bodies, { 0.0, 1.0 })
+    p_collider_idxs : sa.Small_Array(16, int)
+    move_axis(kb, &collider_idxs, &p_collider_idxs, { 1.0, 0.0 }, solids, k_bodies, pick_ups)
+    move_axis(kb, &collider_idxs, &p_collider_idxs, { 0.0, 1.0 }, solids, k_bodies, pick_ups)
+
+    next_p : HealthPickUp
+    p_collider_slice := sa.slice(&p_collider_idxs)
+    processed : sa.Small_Array(16, int)
+    slice.sort(p_collider_slice)
+    #reverse for p_idx in p_collider_slice {
+        if slice.contains(sa.slice(&processed), p_idx) do continue
+        next_p = game_ctx.collision_ctx.health_pickups.data[p_idx]
+        game_ctx.player.health = la.min(game_ctx.player.health + next_p.amount, game_ctx.player.max_health)
+        sa.unordered_remove(&game_ctx.collision_ctx.health_pickups, p_idx)
+        sa.append(&processed, p_idx)
+    }
 }
 
 move_enemy :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, enemies : []Enemy, dt : f32) {
@@ -265,12 +288,15 @@ move_enemy :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, enemies : []Enem
 }
 
 move_kickbox :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f32) {
+    origin_vel := kb.vel
     solids := sa.slice(&ctx.static)
     k_bodies := sa.slice(&ctx.kick_boxes)
+
     collider_idxs : sa.Small_Array(16, int)
-    origin_vel := kb.vel
-    move_axis(kb, &collider_idxs, solids, k_bodies, { 1.0, 0.0 })
-    move_axis(kb, &collider_idxs, solids, k_bodies, { 0.0, 1.0 })
+    p_collider_idxs : sa.Small_Array(16, int)
+    move_axis(kb, &collider_idxs, &p_collider_idxs, { 1.0, 0.0 }, solids, k_bodies)
+    move_axis(kb, &collider_idxs, &p_collider_idxs, { 0.0, 1.0 }, solids, k_bodies)
+
     target_vel : [2]f32
     for idx in sa.slice(&collider_idxs) {
         ctx.kick_boxes.data[idx].vel = origin_vel * 1.5
@@ -294,6 +320,8 @@ move_active_kickbox :: proc(
     target_vel : [2]f32
 
     if has_collision {
+        game_ctx.time_scale = 0.2
+        start_timer(&game_ctx.abs_timers[.Hit_Stop])
         sa.append(&collider_idxs, kb_idx)
         slice.sort(sa.slice(&collider_idxs))
     }

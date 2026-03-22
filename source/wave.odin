@@ -32,6 +32,8 @@ init_wave_spawner :: proc(ws : ^WaveSpawner, pack_size : int = 4, max_enemies : 
     ws.wave_count = 1
     ws.first_spawn = true
     ws.max_waves = 1
+    ws.current_enemies = 0
+    ws.current_pack = 0
 }
 
 spawn_wave :: proc(spawner : ^WaveSpawner, enemies : ^EnemyData) {
