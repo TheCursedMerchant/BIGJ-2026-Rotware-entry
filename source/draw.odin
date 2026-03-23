@@ -11,6 +11,8 @@ GREEN :: [4]f32 { 0, 255, 0, 255 }
 BLUE :: [4]f32 { 0, 0, 255, 255 }
 WHITE :: [4]f32 { 255, 255, 255, 255 }
 
+BUTTON_TEXT_SIZE :: 10.0
+
 Render :: struct {
     anim    : Animation,
     pos     : [2]f32,
@@ -34,6 +36,23 @@ MeterRender :: struct {
     per     : f32,
 }
 
+TextButton :: struct {
+    using draw      : Drawable,
+    text            : DrawableText,
+    is_selected     : b8,
+}
+
+Drawable :: struct {
+    rect : Rectangle,
+    color : rl.Color,
+    alt_color : rl.Color,
+}
+
+DrawableText :: struct {
+    using draw  : Drawable,
+    content     : string, 
+}
+
 draw_frame :: proc(dt: f32, vdt: f32) {
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
     screen_center := screen_dim / 2
@@ -48,7 +67,7 @@ draw_frame :: proc(dt: f32, vdt: f32) {
             draw_pos := rl.GetWorldToScreen2D(lb.rect.xy, game_ctx.camera) + { -4, -8 }
             if lb.cost > 0 { rl.DrawText(rl.TextFormat("$%i", lb.cost), i32(draw_pos.x), i32(draw_pos.y), 10, rl.WHITE) }
         }
-
+        if game_ctx.menu.show do draw_menu_buttons(game_ctx.menu)
     rl.EndTextureMode()
 
 	src_rect := rl.Rectangle{0, 0, f32(game_ctx.level_render.texture.width), f32(-game_ctx.level_render.texture.height)}
@@ -57,7 +76,6 @@ draw_frame :: proc(dt: f32, vdt: f32) {
     rl.BeginDrawing()
 	    rl.DrawTexturePro(game_ctx.level_render.texture, src_rect, dest_rect, {}, 0.0, rl.WHITE)
         rl.DrawFPS(rl.GetScreenWidth() - 128, 16)
-        if game_ctx.menu.show do draw_menu_buttons()
     rl.EndDrawing()
 }
 
@@ -169,14 +187,18 @@ draw_pixel_perfect_render :: proc(render: Render, tint: rl.Color = rl.WHITE) {
     )
 }
 
-draw_menu_buttons :: proc() {
-    menu := game_ctx.menu
-    btn_rect : rl.Rectangle
-    for button in menu.buttons {
-        btn_rect = rect_to_rectangle(button.rect)
-        rl.DrawRectangleRec(btn_rect, button.primary_color)
-        rl.DrawRectangleLinesEx(btn_rect, 1.0, button.secondary_color)
-        rl.DrawText(rl.TextFormat("%s", button.text), i32(btn_rect.x), i32(btn_rect.y), 10, button.text_color)
+draw_text_button :: proc(button : TextButton) {
+    m_btn_draw := button.draw
+    if button.is_selected do m_btn_draw.color = button.alt_color
+    rl.DrawRectangleRec(rect_to_rectangle(button.draw.rect), rl.BLACK)
+    draw_rectangle_lines(m_btn_draw)
+    text_draw := button.text.draw
+    rl.DrawText(rl.TextFormat("%s", button.text.content), i32(text_draw.rect.x), i32(text_draw.rect.y), i32(text_draw.rect.w), text_draw.color)
+}
+
+draw_menu_buttons :: proc(menu: ^Menu) {
+    for kind in sa.slice(&menu.display_buttons) {
+        draw_text_button(menu.buttons[kind])
     }
 }
 
@@ -196,16 +218,16 @@ draw_atlas_anim_at_pos :: proc(anim: Animation, pos: [2]f32, offset: [2]f32, atl
 draw_health_box :: proc(player: ^Player, dt: f32) {
     scale : f32 = 10.0
     screen_dim := arr_cast([2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight()}, f32)
-    draw_pos := [2]f32{ 32, 32 } * game_ctx.res_scale_factor
+    draw_pos := [2]f32{ 32, 32 } //* game_ctx.res_scale_factor
     bg_rect := Rectangle { draw_pos.x, draw_pos.y, player.max_health * scale, 4 }
-    bg_rect.zw *= game_ctx.res_scale_factor
+    //bg_rect.zw *= game_ctx.res_scale_factor
     if !game_ctx.timers[.Player_Damaged].running {
         player.prev_health = la.lerp(player.prev_health, player.health, dt * 0.5)
     }
     mid_rect := Rectangle { draw_pos.x, draw_pos.y, player.prev_health * scale, 4 }
-    mid_rect.zw *= game_ctx.res_scale_factor
+    //mid_rect.zw *= game_ctx.res_scale_factor
     top_rect := Rectangle { draw_pos.x, draw_pos.y, player.health * scale, 4 }
-    top_rect.zw *= game_ctx.res_scale_factor
+    //top_rect.zw *= game_ctx.res_scale_factor
     rl.DrawRectangleRec(rect_to_rectangle(bg_rect), rl.DARKGRAY)
     rl.DrawRectangleRec(rect_to_rectangle(mid_rect), rl.RED)
     rl.DrawRectangleRec(rect_to_rectangle(top_rect), rl.GREEN)
@@ -222,6 +244,11 @@ draw_stomp_meter_at_pos :: proc(meter: ^MeterRender, pos : [2]f32) {
     rl.DrawRectangleRec(rect_to_rectangle(fg^), meter.colors[.Fg])
 }
 
+draw_rectangle_lines :: proc(drawable: Drawable) {
+    i_rect := arr_cast(drawable.rect, i32)
+    rl.DrawRectangleLines(i_rect.x, i_rect.y, i_rect.z, i_rect.w, drawable.color)
+}
+
 interpolate_pos :: proc(prev, current: [2]f32, dt : f32) -> [2]f32 {
     return la.lerp(prev, current, dt)
 }
@@ -236,4 +263,24 @@ fcolor_to_color :: proc(fcolor : [4]f32) -> rl.Color {
     color : rl.Color
     color.rgba = arr_cast(fcolor, u8).rgba
     return color
+}
+
+text_button :: proc(pos: [2]f32, text: string, padding : [2]f32 = {}) -> TextButton {
+    button : TextButton
+    button.text.content = text
+    text_width := f32(rl.MeasureText(rl.TextFormat("%s", text), BUTTON_TEXT_SIZE)) 
+    button.rect = Rectangle {0, 0, text_width + padding.x, BUTTON_TEXT_SIZE + padding.y }
+    button.rect.xy = pos
+    button.text.color = rl.WHITE
+    button.text.rect.xy = button.rect.xy
+    button.text.rect.z = text_width
+    button.text.rect.w = BUTTON_TEXT_SIZE
+    button.color = rl.WHITE
+    center_rect_in_rect(&button.text.rect, button.rect)
+    return button
+}
+
+// Utils
+center_rect_in_rect :: proc(a : ^Rectangle, b : Rectangle) {
+    a.xy += get_rect_center(b) - get_rect_center(a^)
 }

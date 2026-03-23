@@ -37,6 +37,7 @@ Context :: struct {
     font                    : Font,
     player                  : Player,
     camera                  : FollowCamera,
+    raw_scale_factor        : [2]f32,
     update_timer            : f32,
     res_scale_factor        : f32,
     time_scale              : f32,
@@ -55,16 +56,12 @@ Context :: struct {
 PauseMenuButtonKind :: enum { Continue, Restart }
 Menu :: struct {
     buttons                 : [PauseMenuButtonKind]MenuButton,
-    display_buttons         : []MenuButton,
+    display_buttons         : sa.Small_Array(2, PauseMenuButtonKind),
     show                    : bool,
 }
 
 MenuButton :: struct {
-    rect            : Rectangle,
-    primary_color   : rl.Color,
-    secondary_color : rl.Color,
-    text_color      : rl.Color,
-    text            : string,
+    using button    : TextButton,
     kind            : PauseMenuButtonKind,
 }
 
@@ -140,6 +137,7 @@ init_game_ctx :: proc() {
     game_ctx.level_render = rl.LoadRenderTexture(NATIVE_RES.x, NATIVE_RES.y)
     scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
     game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
+    game_ctx.raw_scale_factor = scale_vec
     rl.SetTextureFilter(game_ctx.level_render.texture, .POINT)
     game_ctx.update_timer = FIXED_TIME_STEP
     game_ctx.level = new(Level)
@@ -166,26 +164,27 @@ init_game_ctx :: proc() {
     game_ctx.wave_spawner.wave_count = 1
     game_ctx.time_scale = 1.0
 
-    screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
-    screen_center := arr_cast(([2]i32{ screen_dim.x, screen_dim.y } / 2), f32)
+    //screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
+    //screen_center := arr_cast(([2]i32{ screen_dim.x, screen_dim.y } / 2), f32)
+    texture_center := arr_cast(NATIVE_RES / 2, f32)
     game_ctx.menu.buttons = {
         .Continue = {
-            rect = { screen_center.x, screen_center.y - 32,  128, 16 },
-            text = "Continue",
-            primary_color = rl.BLACK,
-            secondary_color = rl.WHITE,
-            text_color = rl.WHITE,
+            button = text_button(texture_center.xy + { 0, -32 }, "Continue", { 16, 16 }),
             kind = .Continue,
         },
         .Restart = {
-            rect = { screen_center.x, screen_center.y, 128, 16 },
-            text = "Restart",
-            primary_color = rl.BLACK,
-            secondary_color = rl.WHITE,
-            text_color = rl.WHITE,
+            button = text_button(texture_center.xy, "Restart", {16, 16}),
             kind = .Restart,
         },
     }
+
+    continue_button_half_dim := (game_ctx.menu.buttons[.Continue].rect.zw / 2)
+    restart_btn_half_dim := (game_ctx.menu.buttons[.Restart].rect.zw / 2)
+    game_ctx.menu.buttons[.Continue].rect.xy -= continue_button_half_dim
+    game_ctx.menu.buttons[.Continue].text.draw.rect.xy -= continue_button_half_dim
+    game_ctx.menu.buttons[.Restart].rect.xy -= restart_btn_half_dim
+    game_ctx.menu.buttons[.Restart].text.draw.rect.xy -= restart_btn_half_dim
+
     alloc_game_data(game_ctx)
     init_global_timers()
     init_wave_spawner(game_ctx.wave_spawner)
@@ -225,6 +224,9 @@ reset_level :: proc () {
     game_ctx.time_scale = 1.0
     game_ctx.menu.show = false
     game_ctx.difficulty_lvl = 0
+    sa.clear(&game_ctx.menu.display_buttons)
+    sa.append(&game_ctx.menu.display_buttons, PauseMenuButtonKind.Continue)
+    sa.append(&game_ctx.menu.display_buttons, PauseMenuButtonKind.Restart)
     alloc_game_data(game_ctx)
     init_wave_spawner(game_ctx.wave_spawner)
 
@@ -420,7 +422,9 @@ handle_player_input :: proc() {
     if is_input_pressed(action_inputs[.Pause]) {
         game_ctx.menu.show = true
         game_ctx.input_mode = .Menu
-        game_ctx.menu.display_buttons = { game_ctx.menu.buttons[.Continue], game_ctx.menu.buttons[.Restart] }
+        sa.clear(&game_ctx.menu.display_buttons)
+        sa.append(&game_ctx.menu.display_buttons, PauseMenuButtonKind.Continue)
+        sa.append(&game_ctx.menu.display_buttons, PauseMenuButtonKind.Restart)
         return
     }
 
@@ -433,11 +437,17 @@ handle_player_input :: proc() {
 
 //NOTE: If The both display buttons are active then we are in the pause menu
 handle_menu_input :: proc(menu: ^Menu) {
-    mouse_pos := rl.GetMousePosition()
+    mouse_pos := rl.GetMousePosition()    
     if rl.IsMouseButtonPressed(.LEFT) {
-        for button in menu.buttons {
-            if pos_in_rect(mouse_pos, button.rect) {
-                switch button.kind {
+        log.debugf("Mouse pos is : %v", mouse_pos)
+        world_mouse_pos := rl.GetScreenToWorld2D(mouse_pos, game_ctx.camera)
+        test_rect : Rectangle
+        for btn in menu.buttons {
+            test_rect = btn.rect
+            test_rect.xz *= game_ctx.raw_scale_factor.x
+            test_rect.yw *= game_ctx.raw_scale_factor.y
+            if pos_in_rect(mouse_pos, test_rect) {
+                switch btn.kind {
                     case .Continue:
                         log.debug("Continue Clicked!")
                         game_ctx.menu.show = false
@@ -451,7 +461,7 @@ handle_menu_input :: proc(menu: ^Menu) {
                 }
             }
         }
-    } else if is_input_pressed(action_inputs[.Pause]) && len(menu.display_buttons) == 2 {
+    } else if is_input_pressed(action_inputs[.Pause]) && menu.display_buttons.len == 2 { // Check something other than length lol
         game_ctx.menu.show = false
         game_ctx.input_mode = .Play
     }
@@ -542,10 +552,22 @@ parent_window_size_changed :: proc(w, h: int) {
     screen_res := arr_cast(TARGET_RES, f32)
     scale_vec := screen_res / arr_cast(NATIVE_RES, f32)
     game_ctx.res_scale_factor = la.min(scale_vec.x, scale_vec.y)
+    game_ctx.raw_scale_factor = arr_cast([2]c.int{ rl.GetScreenWidth(), rl.GetScreenHeight() }, f32) / arr_cast(NATIVE_RES, f32)
+    log.debugf("Res scale factor is : %v", game_ctx.res_scale_factor)
+    log.debugf("Raw scale factor is : %v", game_ctx.raw_scale_factor)
 
-    screen_center := arr_cast(([2]int{ w, h } / 2), f32)
-    game_ctx.menu.buttons[.Continue].rect = { screen_center.x, screen_center.y - 32,  16, 16 }
-    game_ctx.menu.buttons[.Restart].rect = { screen_center.x, screen_center.y,  16, 16 }
+    center_cell := SCENE_LEVEL_DIM.x / 2
+    level_center := (arr_cast(NATIVE_TILE_DIM, f32) * f32(center_cell) * game_ctx.res_scale_factor) + (arr_cast(NATIVE_TILE_DIM, f32) / 2) 
+    // Center camera onto the center tile pos
+    game_ctx.camera = FollowCamera {
+		offset = (screen_res / 2.0),
+		target = level_center,
+        origin_pos = level_center,
+		zoom   = 1.0,
+        zoom_speed = CAMERA_ZOOM_SPEED,
+        target_zoom = 1.0,
+        shake = { fall_off = FALL_OFF_THRESHHOLD }
+	}
 }
 
 shutdown :: proc() {

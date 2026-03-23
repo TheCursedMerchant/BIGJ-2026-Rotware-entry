@@ -9,20 +9,21 @@ import "core:math/rand"
 PlayerState :: enum { Idle, Dash }
 PlayerOptions :: enum { Damaged }
 
+PlayerAnim :: enum { Idle, Run }
 Player :: struct {
     render          : Render,
     after_images    : sa.Small_Array(4, ColorRender),
-    dir_anims       : [DirectionInputKind]Animation_Name,
     kinematic_body  : KinematicBody,
     last_dir_input  : DirectionInput,
     render_color    : [4]f32,
     prev_dir        : [2]int,
     speed           : f32,
     box_states      : sa.Small_Array(BOX_STATE_SMALL_ARRAY_SIZE, Box_State),
-    state           : PlayerState,
     stomp           : Stomp,
     dash            : Dash,
     spawner         : AreaSpawner,
+    state           : PlayerState,
+    anim            : PlayerAnim,
     health          : f32,
     prev_health     : f32,
     max_health      : f32,
@@ -53,6 +54,11 @@ Dash :: struct {
     speed           : f32,
 }
 
+player_anims := [PlayerAnim][DirectionInputKind]Animation_Name {
+    .Idle = { .Up = .Player_Idle_Up, .Down = .Player_Idle_Down, .Left = .Player_Idle_Left, .Right = .Player_Idle_Right },
+    .Run = { .Up = .Player_Run_Up, .Down = .Player_Run_Down, .Left = .Player_Idle_Left, .Right = .Player_Idle_Right },
+}
+
 init_player :: proc() {
     game_ctx.player = Player {
         render = { 
@@ -60,12 +66,7 @@ init_player :: proc() {
             offset = { -11, -14 },
         },
         render_color = { 255.0, 255.0, 255.0, 255.0 },
-        dir_anims = { 
-            .Up = .Player_Idle_Up,
-            .Down = .Player_Idle_Down,
-            .Left = .Player_Idle_Left,
-            .Right = .Player_Idle_Right,
-        },
+        anim = .Idle,
         speed = 6.0,
         kinematic_body = {
             box = {
@@ -123,10 +124,12 @@ handle_player_idle :: proc(player: ^Player) {
         target_vel := arr_cast(mv_dir, f32) * player.speed
         player.kinematic_body.vel = target_vel
         if player.prev_dir != mv_dir {
-            player.render.anim = create_atlas_anim(player.dir_anims[player.last_dir_input.kind])
+            set_player_anim(player, .Run)
+            //player.render.anim = create_atlas_anim(player.dir_anims[player.last_dir_input.kind])
             player.prev_dir = mv_dir
         }
     } else {
+        change_player_anim(player, .Idle)
         player.kinematic_body.vel = 0
     }
 
@@ -249,7 +252,9 @@ damage_player :: proc(player: ^Player, value : f32) {
         if player.health <= 0 { 
             log.debug("Player died!") 
             game_ctx.menu.show = true
-            game_ctx.menu.display_buttons = { game_ctx.menu.buttons[.Restart] }
+            sa.clear(&game_ctx.menu.display_buttons)
+            sa.append(&game_ctx.menu.display_buttons, PauseMenuButtonKind.Restart)
+            game_ctx.input_mode = .Menu
         }
         shake_cam(32.0)
         start_timer(&game_ctx.timers[.Player_Damaged])
@@ -267,4 +272,13 @@ spawn_random_area :: proc(spawner : ^AreaSpawner) {
         sa.append(&game_ctx.collision_ctx.box_areas, spawner.next_area)
         update_active_areas(1)
     }
+}
+
+set_player_anim :: proc(player: ^Player, anim : PlayerAnim) {
+    player.anim = anim
+    player.render.anim = create_atlas_anim(player_anims[anim][player.last_dir_input.kind])
+}
+
+change_player_anim :: proc(player: ^Player, anim : PlayerAnim) {
+    if player.anim != anim do set_player_anim(player, anim)
 }
