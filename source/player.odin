@@ -56,7 +56,7 @@ Dash :: struct {
 
 player_anims := [PlayerAnim][DirectionInputKind]Animation_Name {
     .Idle = { .Up = .Player_Idle_Up, .Down = .Player_Idle_Down, .Left = .Player_Idle_Left, .Right = .Player_Idle_Right },
-    .Run = { .Up = .Player_Run_Up, .Down = .Player_Run_Down, .Left = .Player_Idle_Left, .Right = .Player_Idle_Right },
+    .Run = { .Up = .Player_Run_Up, .Down = .Player_Run_Down, .Left = .Player_Run_Left, .Right = .Player_Run_Right },
 }
 
 init_player :: proc() {
