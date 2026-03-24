@@ -92,8 +92,11 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
         //Draw loot boxes
         for &lb in sa.slice(&game_ctx.collision_ctx.loot_boxes) {
             lb.render.pos = lb.rect.xy
+            lb.modifier.render.pos = lb.rect.xy
             update_atlas_anim(&lb.render.anim, vdt)
             draw_pixel_perfect_render(lb.render)
+            update_atlas_anim(&lb.modifier.render.anim, vdt)
+            draw_pixel_perfect_render(lb.modifier.render)
         }
 
         for &p in sa.slice(&game_ctx.collision_ctx.health_pickups) {

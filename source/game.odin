@@ -188,6 +188,7 @@ init_game_ctx :: proc() {
     alloc_game_data(game_ctx)
     init_global_timers()
     init_wave_spawner(game_ctx.wave_spawner)
+    init_mod_renders()
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
     // Init timers and spawn data
     single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
@@ -262,7 +263,8 @@ update :: proc() {
                 update_camera_zoom(1.0)
             } else if rl.IsKeyPressed(.M) {
                 game_ctx.time_scale = 1.0
-                update_camera_zoom(-1.0)
+                spawn_loot()
+                //update_camera_zoom(-1.0)
             }
             handle_player_input()
             for game_ctx.update_timer >= FIXED_TIME_STEP {
