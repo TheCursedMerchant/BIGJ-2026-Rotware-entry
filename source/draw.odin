@@ -193,8 +193,8 @@ draw_pixel_perfect_render :: proc(render: Render, tint: rl.Color = rl.WHITE) {
 draw_text_button :: proc(button : TextButton) {
     m_btn_draw := button.draw
     if button.is_selected do m_btn_draw.color = button.alt_color
-    rl.DrawRectangleRec(rect_to_rectangle(button.draw.rect), rl.BLACK)
-    draw_rectangle_lines(m_btn_draw)
+    rl.DrawRectangleRec(rect_to_rectangle(m_btn_draw.rect), rl.BLACK)
+    rl.DrawRectangleLinesEx(rect_to_rectangle(m_btn_draw.rect), 1.0, rl.WHITE)
     text_draw := button.text.draw
     rl.DrawText(rl.TextFormat("%s", button.text.content), i32(text_draw.rect.x), i32(text_draw.rect.y), i32(text_draw.rect.w), text_draw.color)
 }
@@ -247,11 +247,6 @@ draw_stomp_meter_at_pos :: proc(meter: ^MeterRender, pos : [2]f32) {
     rl.DrawRectangleRec(rect_to_rectangle(fg^), meter.colors[.Fg])
 }
 
-draw_rectangle_lines :: proc(drawable: Drawable) {
-    i_rect := arr_cast(drawable.rect, i32)
-    rl.DrawRectangleLines(i_rect.x, i_rect.y, i_rect.z, i_rect.w, drawable.color)
-}
-
 interpolate_pos :: proc(prev, current: [2]f32, dt : f32) -> [2]f32 {
     return la.lerp(prev, current, dt)
 }
@@ -279,6 +274,7 @@ text_button :: proc(pos: [2]f32, text: string, padding : [2]f32 = {}) -> TextBut
     button.text.rect.z = text_width
     button.text.rect.w = BUTTON_TEXT_SIZE
     button.color = rl.WHITE
+    button.alt_color = rl.BLACK
     center_rect_in_rect(&button.text.rect, button.rect)
     return button
 }
