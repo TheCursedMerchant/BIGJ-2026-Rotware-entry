@@ -31,6 +31,7 @@ InputMode :: enum { Play, Menu }
 Context :: struct {
     timers                  : [TimerTag]Timer,
     abs_timers              : [AbsoluteTimerTag]Timer,
+    pick_up_renders         : sa.Small_Array(8, PickUpTextRender),
     explosion_rects         : sa.Small_Array(16, Explosion),
     level_render            : RenderTexture,
     atlas                   : Texture,
@@ -251,6 +252,7 @@ update :: proc() {
             game_ctx.update_timer += dt 
             update_global_abs_timers(raw_frame_time)
             update_global_timers(dt)
+            update_pick_up_render_timers(dt)
             for &pattern in sa.slice(&game_ctx.pattern_master.patterns) {
                 update_hitbox_pattern_timers(&pattern, dt)
             }
@@ -275,7 +277,9 @@ update :: proc() {
                 game_ctx.update_timer -= FIXED_TIME_STEP
                 physics_update(FIXED_TIME_STEP)
             }
-        case .Menu : 
+
+            update_pick_up_renders(dt)
+        case .Menu :
             handle_menu_input(game_ctx.menu)
     }
 

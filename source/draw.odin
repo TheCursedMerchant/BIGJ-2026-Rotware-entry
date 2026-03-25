@@ -53,6 +53,11 @@ DrawableText :: struct {
     content     : string, 
 }
 
+PickUpTextRender :: struct {
+    text_draw   : DrawableText,
+    timer       : Timer,
+}
+
 draw_frame :: proc(dt: f32, vdt: f32) {
 	screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
     screen_center := screen_dim / 2
@@ -67,6 +72,11 @@ draw_frame :: proc(dt: f32, vdt: f32) {
             draw_pos := rl.GetWorldToScreen2D(lb.rect.xy, game_ctx.camera) + { -4, -8 }
             if lb.cost > 0 { rl.DrawText(rl.TextFormat("$%i", lb.cost), i32(draw_pos.x), i32(draw_pos.y), 10, rl.WHITE) }
         }
+        for render in sa.slice(&game_ctx.pick_up_renders) {
+            draw_pos := rl.GetWorldToScreen2D(render.text_draw.rect.xy, game_ctx.camera) + { -4, -8 }
+            rl.DrawText(rl.TextFormat("%s", render.text_draw.content), i32(draw_pos.x), i32(draw_pos.y), 10.0, render.text_draw.color)
+        }
+
         if game_ctx.menu.show do draw_menu_buttons(game_ctx.menu)
     rl.EndTextureMode()
 
@@ -142,13 +152,14 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
         }
 
         if player.dash.charges < player.dash.max_charges {
+            update_dash_draw_pos(player)
             for i in 0..<player.dash.max_charges {
-                player.dash.renders.inactive.pos = player.render.pos + ({ 5, 0 } * f32(i))
+                player.dash.renders.inactive.pos = player.dash.start_pos + ({ 5, 0 } * f32(i))
                 draw_pixel_perfect_render(player.dash.renders.inactive)
             }
 
             for i in 0..<player.dash.charges {
-                player.dash.renders.ready.pos = player.render.pos + ({ 5, 0 } * f32(i))
+                player.dash.renders.ready.pos = player.dash.start_pos + ({ 5, 0 } * f32(i))
                 draw_pixel_perfect_render(player.dash.renders.ready)
             }
         }
@@ -282,4 +293,13 @@ text_button :: proc(pos: [2]f32, text: string, padding : [2]f32 = {}) -> TextBut
 // Utils
 center_rect_in_rect :: proc(a : ^Rectangle, b : Rectangle) {
     a.xy += get_rect_center(b) - get_rect_center(a^)
+}
+
+get_text_dimensions :: proc(font_size : i32, text: string) -> [2]i32 {
+    width := rl.MeasureText(rl.TextFormat("%s", text), font_size)
+    return { width, font_size }
+}
+
+rl_color_to_fcolor :: proc (color : rl.Color) -> [4]f32 {
+    return { f32(color.r), f32(color.b), f32(color.g), f32(color.a) }
 }

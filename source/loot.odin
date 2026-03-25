@@ -2,8 +2,11 @@ package game
 import "core:log"
 import "core:math/rand"
 import sa "core:container/small_array"
+import rl "vendor:raylib"
 
 MOD_RENDER_OFFSET :: [2]f32{ 0, -16 }
+MOD_RENDER_DISPLAY_TIME : f32 : 1.5
+MOD_TEXT_MOVE_SPEED : f32 : 8.0
 
 PlayerModifier :: struct {
     render              : Render,
@@ -46,6 +49,17 @@ global_player_mods := [PlayerModKind]PlayerModifier {
     .Stomp_Size = { stomp_size = 2.0, render = { anim = { atlas_anim = .Upgrade_Stomp_Size_Idle }, offset = MOD_RENDER_OFFSET}},
     .Stomp_Force = { stomp_force = 1.0, render = { anim = { atlas_anim = .Upgrade_Stomp_Force_Idle }, offset = MOD_RENDER_OFFSET }},
     .Stomp_Cd = { stomp_cd = -0.1, render = { anim = { atlas_anim = .Upgrade_Stomp_Cooldown_Idle }, offset = MOD_RENDER_OFFSET}},
+}
+
+global_player_mod_strings := [PlayerModKind]string {
+   .Health = "Health Up",
+   .Speed = "Speed Up",
+   .Dash_Charge = "Extra Charge",
+   .Dash_Speed = "Dash Speed Up",
+   .Dash_Cd = "Dash Cooldown Reduction",
+   .Stomp_Size = "Stomp Size Up",
+   .Stomp_Force = "Stomp Force Up",
+   .Stomp_Cd = "Stom Cooldown Reduction",
 }
 
 init_mod_renders :: proc() {
@@ -112,14 +126,12 @@ spawn_loot :: proc() {
 
 stomp_loot :: proc(player: ^Player, lb: ^Lootbox, idx: int) {
     if rectangle_overlap(player.stomp.hitbox.rect, lb.rect) {
-        log.debug("Stomp hit loot!")
         if lb.open {
             apply_player_modifer(player, lb.modifier)
-            log.debugf("Collect Mod : %v", lb.modifier)
+            add_pick_up_render_at_pos(lb.modifier.kind, get_rect_center(lb.rect))
             lb^ = {}
             sa.append(&game_ctx.collision_ctx.free_lb, idx)
         } else if game_ctx.currency >= lb.cost {
-            log.debug("Open Box!")
             game_ctx.currency -= lb.cost
             lb.open = true
             lb.cost = 0
@@ -141,4 +153,43 @@ apply_player_modifer :: proc(player: ^Player, modifier : PlayerModifier) {
     player.speed += modifier.move_speed
     game_ctx.timers[.Player_Stomp].duration += modifier.stomp_cd
     game_ctx.timers[.Player_Dash].duration += modifier.dash_cd
+}
+
+// Center's relative to input pos
+add_pick_up_render_at_pos :: proc(kind: PlayerModKind, pos: [2]f32) {
+    text_dim := get_text_dimensions(10, global_player_mod_strings[kind])
+    text_half_dim := text_dim / 2
+    text_pos := pos - arr_cast(text_half_dim, f32)
+    n_render := PickUpTextRender{
+        text_draw = {
+            content = global_player_mod_strings[kind],
+            rect = { text_pos.x, text_pos.y, f32(text_dim.x), f32(text_dim.y) },
+            color = rl.WHITE,
+        },
+        timer = { duration = MOD_RENDER_DISPLAY_TIME },
+    }
+    start_timer(&n_render.timer)
+    sa.append(&game_ctx.pick_up_renders, n_render)
+}
+
+update_pick_up_renders :: proc(dt: f32) {
+    for &render, idx in sa.slice(&game_ctx.pick_up_renders) {
+        render.text_draw.rect.y -= MOD_TEXT_MOVE_SPEED * dt
+        fcolor := rl_color_to_fcolor(render.text_draw.color)
+        fcolor.a -= 8.0 * dt
+        render.text_draw.color = fcolor_to_color(fcolor)
+    }
+}
+
+update_pick_up_render_timers :: proc(dt: f32) {
+    free_idx : sa.Small_Array(16, int)
+    for &render, idx in sa.slice(&game_ctx.pick_up_renders) {
+        if update_timer(&render.timer, dt) {
+            sa.append(&free_idx, idx)
+        }
+    }
+
+    #reverse for i in sa.slice(&free_idx) {
+        sa.unordered_remove(&game_ctx.pick_up_renders, i)
+    }
 }

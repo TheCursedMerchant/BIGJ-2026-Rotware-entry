@@ -46,7 +46,8 @@ Stomp :: struct {
 }
 
 Dash :: struct {
-    renders          : ChargeRenders,
+    renders         : ChargeRenders,
+    start_pos       : [2]f32,
     charges         : int,
     max_charges     : int,
     multiplier      : f32,
@@ -92,8 +93,8 @@ init_player :: proc() {
             max_charges = 3,
             charges = 3,
             renders = {
-                ready = { anim = create_atlas_anim(.Dash_Charge_Enabled), offset = { -2, 16 } },
-                inactive = { anim = create_atlas_anim(.Dash_Charge_Disabled), offset = { -2, 16 } },
+                ready = { anim = create_atlas_anim(.Dash_Charge_Enabled), offset = { 0, 16 } },
+                inactive = { anim = create_atlas_anim(.Dash_Charge_Disabled), offset = { 0, 16 } },
             }
         },
         spawner = {
@@ -104,6 +105,12 @@ init_player :: proc() {
         max_health = 10.0,
         health = 10.0,
     }
+}
+
+update_dash_draw_pos :: proc(player: ^Player) {
+    player_rect_w_center := player.render.pos.x + (player.kinematic_body.box.rectangle.z / 2)
+    dash_width_center := la.floor((5.0 * f32(player.dash.max_charges)) / 2)
+    player.dash.start_pos = { player_rect_w_center - dash_width_center, player.render.pos.y }
 }
 
 handle_player_idle :: proc(player: ^Player) {
