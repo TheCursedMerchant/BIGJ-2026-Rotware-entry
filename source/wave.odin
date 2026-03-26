@@ -44,8 +44,7 @@ spawn_wave :: proc(spawner : ^WaveSpawner, enemies : ^EnemyData) {
         }
         spawn_point_idx := rand.int32_range(0, len(spawner.spawn_points))
         next_spawn := spawner.spawns[spawner.next_spawn]
-        next_spawn.kb.box.rectangle.xy = spawner.spawn_points[spawn_point_idx]
-        add_enemy(next_spawn, enemies)
+        add_enemy_at_pos(enemies, next_spawn, spawner.spawn_points[spawn_point_idx])
         spawner.current_enemies += 1
         spawner.current_pack += 1
         start_timer(&game_ctx.timers[.Wave_Spawn_Enemy])

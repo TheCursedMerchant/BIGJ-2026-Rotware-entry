@@ -22,7 +22,16 @@ HitboxPattern :: struct {
 }
 
 HitboxPatternMaster :: struct {
-    patterns : sa.Small_Array(MAX_HITBOX_PATTERNS, HitboxPattern)
+    patterns    : sa.Small_Array(MAX_HITBOX_PATTERNS, HitboxPattern),
+    area_count  : int,
+    max_size    : f32,
+}
+
+init_hitbox_pattern_master :: proc(pm : ^HitboxPatternMaster) {
+    pm.area_count = 1
+    pm.max_size = 128
+    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
+    sa.append(&game_ctx.pattern_master.patterns, single_hitbox)
 }
 
 hitbox_pattern_single :: proc(render : HitBoxRender, damage : f32 = 1.0, duration : f32 = 1.0) -> (pattern : HitboxPattern) {
@@ -31,8 +40,10 @@ hitbox_pattern_single :: proc(render : HitBoxRender, damage : f32 = 1.0, duratio
     return { hitboxes = boxes, damage = damage }
 }
 
-spawn_hitbox_pattern_at_pos :: proc(pattern: ^HitboxPattern, pos : [2]f32) {
+spawn_hitbox_pattern_at_pos :: proc(pattern: ^HitboxPattern, pos : [2]f32, size: [2]f32) {
+    log.debugf("Spawning hitbox pattern with pos and size : %v | %v", pos, size)
     for &box in sa.slice(&pattern.hitboxes) {
+        box.render.rect.zw = size
         box.render.rect.xy = pos + box.rel_pos
         box.render.current_color = box.render.color
         start_timer(&box.timer)

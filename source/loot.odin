@@ -47,7 +47,7 @@ global_player_mods := [PlayerModKind]PlayerModifier {
     .Dash_Speed = { dash_speed = 0.5, render = { anim = { atlas_anim = .Upgrade_Dash_Speed_Idle }, offset = MOD_RENDER_OFFSET }},
     .Dash_Cd = { dash_cd = -0.1, render = { anim = { atlas_anim = .Upgrade_Dash_Cooldown_Idle }, offset = MOD_RENDER_OFFSET }},
     .Stomp_Size = { stomp_size = 2.0, render = { anim = { atlas_anim = .Upgrade_Stomp_Size_Idle }, offset = MOD_RENDER_OFFSET}},
-    .Stomp_Force = { stomp_force = 1.0, render = { anim = { atlas_anim = .Upgrade_Stomp_Force_Idle }, offset = MOD_RENDER_OFFSET }},
+    .Stomp_Force = { stomp_force = 5.0, render = { anim = { atlas_anim = .Upgrade_Stomp_Force_Idle }, offset = MOD_RENDER_OFFSET }},
     .Stomp_Cd = { stomp_cd = -0.1, render = { anim = { atlas_anim = .Upgrade_Stomp_Cooldown_Idle }, offset = MOD_RENDER_OFFSET}},
 }
 

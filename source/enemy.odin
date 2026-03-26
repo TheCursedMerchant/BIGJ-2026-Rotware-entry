@@ -96,7 +96,7 @@ move_attack_player :: proc(enemy : ^Enemy) {
 add_enemy_at_tile_pos :: proc(store : ^EnemyData, pos : [2]int, kind : EnemyKind = .Chaser) {
     raw_pos := arr_cast(pos * NATIVE_TILE_DIM, f32)
     enemy := new_enemy(pos = raw_pos, kind = kind)
-    add_enemy(enemy, store)
+    add_enemy_at_pos(store, enemy, raw_pos)
 }
 
 new_chaser :: proc(pos: [2]f32 = {}) -> Enemy {
@@ -143,7 +143,7 @@ kill_enemy :: proc(idx: int, data : ^EnemyData) {
     game_ctx.currency += enemy.currency_value
 
     roll := rand.float32_range(0.0, 1.0)
-    if roll < enemy.drop_chance do drop_health_pick_up_pos(1.0, enemy.kb.box.rectangle.xy)
+    if roll < enemy.drop_chance do drop_health_pick_up_pos(1.0 * f32(game_ctx.difficulty_lvl), enemy.kb.box.rectangle.xy)
 
     enemy^ = Enemy{ state = .Dead }
     append(&data.dead, idx)
@@ -155,13 +155,15 @@ kill_enemy :: proc(idx: int, data : ^EnemyData) {
     }
 }
 
-add_enemy :: proc(enemy: Enemy, data: ^EnemyData) {
+add_enemy_at_pos :: proc(data: ^EnemyData, enemy: Enemy, pos: [2]f32 = {}) {
+    m_enemy := enemy
+    m_enemy.kb.box.rectangle.xy = pos
+    m_enemy.kb.prev_pos = pos
+    m_enemy.render.pos = pos
     if len(data.dead) > 0 {
-        next_idx := pop(&data.dead)
-        data.active[next_idx] = enemy
-        data.active[next_idx].kb.prev_pos = enemy.kb.box.rectangle.xy
+        data.active[pop(&data.dead)] = m_enemy
     } else {
-        append(&data.active, enemy)
+        append(&data.active, m_enemy)
     }
 }
 

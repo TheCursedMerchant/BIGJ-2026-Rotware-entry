@@ -20,6 +20,12 @@ DASH_FALL_OFF :: [2]f32{ 5.0, 5.0 }
 MAX_TIMERS :: 16
 SLAM_KICK_SHAKE :: 13
 
+MAX_WAVES :: 100
+MAX_LEVEL :: 99
+MIN_SPAWN_PATTERN_DURATION : f32 : 0.05
+MIN_SPAWN_WAVE_DURATION : f32 : 5.0
+EXPLOSION_DURATION : f32 : 0.032
+
 // Alias's
 Font :: rl.Font
 Texture :: rl.Texture
@@ -164,6 +170,7 @@ init_game_ctx :: proc() {
     game_ctx.menu = new(Menu)
     game_ctx.wave_spawner.wave_count = 1
     game_ctx.time_scale = 1.0
+    game_ctx.pattern_master.area_count = 1
 
     //screen_dim := [2]i32{ rl.GetScreenWidth(), rl.GetScreenHeight() }
     //screen_center := arr_cast(([2]i32{ screen_dim.x, screen_dim.y } / 2), f32)
@@ -190,10 +197,8 @@ init_game_ctx :: proc() {
     init_global_timers()
     init_wave_spawner(game_ctx.wave_spawner)
     init_mod_renders()
+    init_hitbox_pattern_master(game_ctx.pattern_master)
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
-    // Init timers and spawn data
-    single_hitbox := hitbox_pattern_single(render = { rect = {0, 0, 128, 128}, color = RED, current_color = RED }, damage = 5.0, duration = 1.0)
-    sa.append(&game_ctx.pattern_master.patterns, single_hitbox)
     start_global_timers()
 }
 
@@ -231,6 +236,7 @@ reset_level :: proc () {
     sa.append(&game_ctx.menu.display_buttons, PauseMenuButtonKind.Restart)
     alloc_game_data(game_ctx)
     init_wave_spawner(game_ctx.wave_spawner)
+    init_hitbox_pattern_master(game_ctx.pattern_master)
 
     for &timer in game_ctx.timers { stop_timer(&timer) }
     for &timer in game_ctx.abs_timers { stop_timer(&timer) }
@@ -296,7 +302,7 @@ init_global_timers :: proc() {
     game_ctx.timers[.Spawn_Pattern] = { duration = 5.0 }
     game_ctx.timers[.Spawn_Area] = { duration = 2.0 }
     game_ctx.timers[.Player_Damaged] = { duration = 1.0 }
-    game_ctx.timers[.Spawn_Wave] = { duration = 20.0 }
+    game_ctx.timers[.Spawn_Wave] = { duration = 15.0 }
     game_ctx.timers[.Wave_Spawn_Enemy] = { duration = 0.8 }
     game_ctx.abs_timers[.Hit_Stop] = { duration = 0.15 }
 }
@@ -322,10 +328,17 @@ update_global_timers :: proc(dt: f32) {
                 }
             case .Spawn_Pattern:
                 new_pos : [2]f32
+                new_size : [2]f32
                 for pattern in sa.slice(&game_ctx.pattern_master.patterns) {
-                    new_pos.x = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.x * NATIVE_TILE_DIM.x))
-                    new_pos.y = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.y * NATIVE_TILE_DIM.y))
-                    spawn_hitbox_pattern_at_pos(&game_ctx.pattern_master.patterns.data[0], new_pos)
+                    log.debugf("Spawn Pattern Timer expired! Area count : %v", game_ctx.pattern_master.area_count)
+                    for i in 0..=game_ctx.pattern_master.area_count {
+                        log.debugf("Spawning new pattern....")
+                        new_pos.x = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.x * NATIVE_TILE_DIM.x))
+                        new_pos.y = rand.float32_range(0.0, f32(SCENE_LEVEL_DIM.y * NATIVE_TILE_DIM.y))
+                        new_size.x = rand.float32_range(0.0, 128)
+                        new_size.y = rand.float32_range(0.0, 128)
+                        spawn_hitbox_pattern_at_pos(&game_ctx.pattern_master.patterns.data[0], new_pos, new_size)
+                    }
                 }
             case .Spawn_Area:
                 spawner := &game_ctx.player.spawner
@@ -366,7 +379,7 @@ update_global_abs_timers :: proc(dt: f32) {
 
 update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32) {
     free_kbs : sa.Small_Array(MAX_BOX_BODIES, int)
-    explosion := Explosion { timer = { duration = 0.2 } }
+    explosion := Explosion { timer = { duration = 0.1 } }
     for &kb, idx in sa.slice(&ctx.kick_boxes) {
         if update_timer(&kb.timer, dt) {
             explosion.rect = kb.box.rectangle
@@ -388,7 +401,7 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
 
 explode_kickbox :: proc(kb: ^KinematicBody) {
     stop_timer(&kb.timer)
-    explosion := Explosion { timer = { duration = 0.1 } }
+    explosion := Explosion { timer = { duration = EXPLOSION_DURATION } }
     explosion.rect = kb.box.rectangle
     explosion.rect.zw *= 5.0
     explosion.rect.xy = get_rect_center(kb.box.rectangle) - (explosion.rect.zw / 2.0)
@@ -616,22 +629,23 @@ load_atlased_font :: proc(atlas: Texture) -> Font {
 }
 
 progress_difficulty :: proc(val : int) {
-    game_ctx.difficulty_lvl += val
-    switch game_ctx.difficulty_lvl % 4 {
+    game_ctx.difficulty_lvl = la.min(game_ctx.difficulty_lvl + val, MAX_LEVEL)
+    switch game_ctx.difficulty_lvl % 5 {
         case 0 :
-            log.debugf("Difficulty : %v, increasing wave count", game_ctx.difficulty_lvl)
+            game_ctx.pattern_master.area_count += 1
+            p_timer := &game_ctx.timers[.Spawn_Pattern]
+            p_timer.duration = la.max(MIN_SPAWN_PATTERN_DURATION, p_timer.duration - 0.5)
+        case 1 :
             game_ctx.wave_spawner.max_waves += 1
-        case 1 : 
-            log.debugf("Difficulty : %v, increasing wave size", game_ctx.difficulty_lvl)
+        case 2 : 
             game_ctx.wave_spawner.max_enemies += 1
             game_ctx.wave_spawner.pack_size += 1
-        case 2 :
-            log.debugf("Difficulty : %v, upgrading spawns", game_ctx.difficulty_lvl)
-            game_ctx.timers[.Spawn_Wave].duration -= 1.0
-            upgrade_spawns(game_ctx.wave_spawner)
-        case 3 : 
-            log.debugf("Difficulty : %v, spawning loot!", game_ctx.difficulty_lvl)
+        case 3 :
             spawn_loot()
+        case 4 : 
+            w_timer := &game_ctx.timers[.Spawn_Wave]
+            w_timer.duration -= la.max(MIN_SPAWN_WAVE_DURATION, w_timer.duration - 1.0)
+            upgrade_spawns(game_ctx.wave_spawner)
     }
 }
 
