@@ -126,7 +126,10 @@ paint_lvl_texture :: proc(dt: f32, vdt: f32) {
         //Draw Enemies
         for &enemy in game_ctx.enemies.active {
             kb_draw_pos = interpolate_pos(enemy.kb.prev_pos, enemy.kb.box.rectangle.xy, dt)
-            box_draw_at_pos(enemy.kb.box, kb_draw_pos)
+            enemy.render.pos = kb_draw_pos
+            update_atlas_anim(&enemy.render.anim, vdt)
+            draw_pixel_perfect_render(enemy.render)
+            //box_draw_at_pos(enemy.kb.box, kb_draw_pos)
             rl.DrawRectangleRec(rect_to_rectangle(enemy.attack_box.rect), fcolor_to_color(enemy.attack_box.current_color))
             enemy.attack_box.current_color = fade_color(enemy.attack_box.current_color, 20.0)
         }

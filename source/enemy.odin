@@ -12,8 +12,10 @@ EnemyKind :: enum { Chaser }
 
 Enemy :: struct {
     kb              : KinematicBody,
+    render          : Render,
     attack_box      : HitBoxRender,
     currency_value  : int,
+    prev_x_dir      : f32,
     speed           : f32,
     health          : f32,
     damage          : f32,
@@ -43,6 +45,17 @@ HealthPickUp :: struct {
     amount  : f32,
 }
 
+AnimDirectionKind :: enum { Right, Left }
+
+AnimConfig :: struct {
+    anims           : [AnimDirectionKind]Animation_Name,
+    offset          : [2]f32,
+}
+
+enemy_anims := [EnemyKind]AnimConfig {
+    .Chaser = { anims = { .Right = .Box_Cutter_Walk_Right, .Left = .Box_Cutter_Walk_Left }, offset = { -8, -8 } },
+}
+
 run_state_basic :: proc(enemy: ^Enemy) {
     switch enemy.state {
         case .Chase: move_attack_player(enemy)
@@ -54,6 +67,7 @@ move_attack_player :: proc(enemy : ^Enemy) {
     player_rect := game_ctx.player.kinematic_body.box.rectangle
     dir_to_player := la.normalize(player_rect.xy - enemy.kb.box.rectangle.xy)
     enemy_center := enemy.kb.box.rectangle.xy + (enemy.kb.box.rectangle.zw / 2.0)
+    cfg := enemy_anims[enemy.kind]
     if la.distance(enemy_center, player_rect.xy) < enemy.attack_range {
         enemy.kb.vel = {}
         if enemy.attack_timer <= 0 {
@@ -67,6 +81,15 @@ move_attack_player :: proc(enemy : ^Enemy) {
     } else {
         target_vel := arr_cast(dir_to_player, f32) * enemy.speed
         enemy.kb.vel = target_vel
+    }
+
+    // Gotta be a better way than this
+    if dir_to_player.x > 0 && enemy.prev_x_dir < 0 {
+        enemy.render.anim = create_atlas_anim(cfg.anims[.Right])
+        enemy.prev_x_dir = dir_to_player.x
+    } else if dir_to_player.x < 0 && enemy.prev_x_dir > 0 {
+        enemy.render.anim = create_atlas_anim(cfg.anims[.Left])
+        enemy.prev_x_dir = dir_to_player.x
     }
 }
 
@@ -95,14 +118,14 @@ new_enemy :: proc(
     return Enemy{
         kb = {
             box = {
-                rectangle = { pos.x, pos.y, 16, 16 },
+                rectangle = { pos.x, pos.y, 16, 14 },
                 colors = { .Primary = rl.PURPLE, .Secondary = rl.RED },
                 color = rl.PURPLE,
                 line_thickness = 1.0,
             },
         },
         attack_box = { rect = { 0, 0, attack_box_size.x, attack_box_size.y }, color = RED },
-        //render = { anim = create_atlas_anim(.Player_Idle_Down), pos = raw_pos },
+        render = { anim = create_atlas_anim(enemy_anims[kind].anims[.Right]), pos = pos, offset = enemy_anims[kind].offset },
         health = health,
         damage = damage,
         attack_range = range,
@@ -110,6 +133,7 @@ new_enemy :: proc(
         speed = mv_speed,
         drop_chance = drop_chance,
         kind = kind,
+        prev_x_dir = 1.0,
     }
 }
 
