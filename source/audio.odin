@@ -1,9 +1,11 @@
 package game
 import rl "vendor:raylib"
+import la "core:math/linalg"
 import "core:math/rand"
 
 Audio :: struct {
-    volume : f32
+    volume  : f32,
+    bgm     : rl.Music,
 }
 
 AudioClip :: struct {
@@ -33,18 +35,22 @@ global_audio_clips := [AudioClipName]AudioClip {
     .Coin = { path = "../assets/coin.wav" }
 }
 
-init_sounds :: proc(ctx: ^Context) {
+init_audio :: proc(ctx: ^Context) {
+    ctx.audio.volume = 0.5
     for &clip in global_audio_clips {
         clip.sound = rl.LoadSound(rl.TextFormat("%s", clip.path))
-        rl.SetSoundVolume(clip.sound, 0.5)
+        rl.SetSoundVolume(clip.sound, ctx.audio.volume)
     }
+    ctx.audio.bgm = rl.LoadMusicStream("../assets/test_song.wav")
+    rl.SetMusicVolume(ctx.audio.bgm, ctx.audio.volume - .15)
 }
 
 set_volume :: proc(audio: ^Audio, val : f32) {
     audio.volume = val
     for &clip in global_audio_clips {
-        rl.SetSoundVolume(clip.sound, val)
+        rl.SetSoundVolume(clip.sound, audio.volume)
     }
+    rl.SetMusicVolume(audio.bgm, la.max(audio.volume - .15, 0.0))
 }
 
 play_sound_rand_pitch :: proc (name: AudioClipName) {

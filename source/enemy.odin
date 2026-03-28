@@ -178,7 +178,7 @@ drop_health_pick_up_pos :: proc(val : f32, pos: [2]f32) {
     health_p := HealthPickUp {
         amount = val,
         render = { anim = create_atlas_anim(.Health_Pick_Up_Idle) },
-        rect = { pos.x, pos.y, 6, 6 },
+        rect = { pos.x, pos.y, 8, 8 },
     }
     sa.append(&game_ctx.collision_ctx.health_pickups, health_p)
 }

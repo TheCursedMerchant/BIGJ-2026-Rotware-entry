@@ -130,7 +130,7 @@ init :: proc() {
 	rl.InitAudioDevice()
     if rl.IsAudioDeviceReady() {
         log.info("Audio device is ready!")
-        init_sounds(game_ctx)
+        init_audio(game_ctx)
     }
 
     log.debugf("Color render size : %v", size_of(ColorRender))
@@ -245,12 +245,20 @@ reset_level :: proc () {
 
     start_global_timers()
     spawn_wave(game_ctx.wave_spawner, game_ctx.enemies)
+    rl.PlayMusicStream(game_ctx.audio.bgm)
 }
 
 // NOTE : Raw Frame Time is time it took to draw the previous frame
 // dt Is Raw Frame Time scaled by the game's timescale factor (mainly for hit stop)
 // FIXED_TIME_STEP is the rate we want to update the physics checks
 update :: proc() {
+    rl.UpdateMusicStream(game_ctx.audio.bgm)
+    
+    if rl.IsKeyPressed(.SPACE) {
+        rl.StopAudioStream(game_ctx.audio.bgm)
+        rl.PlayMusicStream(game_ctx.audio.bgm)
+    }
+
     if rl.IsKeyPressed(.R) { reset_level() }
     raw_frame_time := rl.GetFrameTime()
     dt := raw_frame_time * game_ctx.time_scale
@@ -267,14 +275,14 @@ update :: proc() {
             update_kickbox_timers(game_ctx.collision_ctx, &game_ctx.player, dt)
             update_explosion_timers(dt)
 
-            // TODO: Remove testing only
             if rl.IsKeyPressed(.N) {
-                update_camera_zoom(1.0)
+                new_volume := la.max(game_ctx.audio.volume - 0.1, 0.0)
+                set_volume(game_ctx.audio, new_volume)
             } else if rl.IsKeyPressed(.M) {
-                game_ctx.time_scale = 1.0
-                spawn_loot()
-                //update_camera_zoom(-1.0)
+                new_volume := la.min(game_ctx.audio.volume + 0.1, 1.0)
+                set_volume(game_ctx.audio, new_volume)
             }
+
             handle_player_input()
             for game_ctx.update_timer >= FIXED_TIME_STEP {
                 for &enemy in game_ctx.enemies.active {
