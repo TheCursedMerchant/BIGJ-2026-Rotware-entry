@@ -144,6 +144,7 @@ handle_player_idle :: proc(player: ^Player) {
     stomp_available := !game_ctx.timers[.Player_Stomp].running
 
     if has_mv_event && dash_available && is_input_pressed(action_inputs[.Dash]) {
+        play_sound_rand_pitch(.Dash)
         player.state = .Dash
         player.dash.charges -= 1
         target_vel := arr_cast(mv_dir, f32) * player.speed * player.dash.multiplier
@@ -161,6 +162,7 @@ handle_player_idle :: proc(player: ^Player) {
 }
 
 left_stomp :: proc (player: ^Player) {
+    play_sound_rand_pitch(.Stomp)
     shake_cam(SLAM_KICK_SHAKE)
     player_center := get_rect_center(player.kinematic_body.box.rectangle)
     stomp_center_offset := player.stomp.hitbox.rect.zw / 2
@@ -202,6 +204,7 @@ left_stomp :: proc (player: ^Player) {
 }
 
 right_stomp :: proc(player: ^Player) {
+    play_sound_rand_pitch(.Stomp)
     shake_cam(SLAM_KICK_SHAKE)
     player_center := get_rect_center(player.kinematic_body.box.rectangle)
     stomp_center_offset := player.stomp.hitbox.rect.zw / 2
@@ -213,6 +216,7 @@ right_stomp :: proc(player: ^Player) {
     kb_center : [2]f32
     for &kb in sa.slice(&game_ctx.collision_ctx.kick_boxes) {
         if rectangle_overlap(player.stomp.hitbox.rect, kb.box.rectangle) {
+            play_sound_rand_pitch(.Kick_Box)
             kb_center = get_rect_center(kb.box.rectangle)
             kick_dir = la.normalize(kb_center - stomp_center)
             kb.box.active_dam = player.stomp.damage
@@ -253,10 +257,12 @@ create_player_after_image :: proc() {
 
 damage_player :: proc(player: ^Player, value : f32) {
     if .Damaged not_in player.options {
+        play_sound_rand_pitch(.Damage)
         player.prev_health = player.health
         player.health -= value
         player.options += { .Damaged }
-        if player.health <= 0 { 
+        if player.health <= 0 {
+            play_sound_rand_pitch(.Death)
             log.debug("Player died!") 
             game_ctx.menu.show = true
             sa.clear(&game_ctx.menu.display_buttons)

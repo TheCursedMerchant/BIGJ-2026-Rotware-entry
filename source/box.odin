@@ -189,6 +189,7 @@ shrink_box :: proc(ctx: ^CollisionContext, box: ^Box, size : [2]int, player_rect
 }
 
 consume_area :: proc(currency : int) {
+    play_sound_rand_pitch(.Coin)
     update_currency(currency)
     update_active_areas(-1)
 }

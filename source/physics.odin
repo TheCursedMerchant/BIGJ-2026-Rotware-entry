@@ -276,6 +276,7 @@ move_player :: proc(kb: ^KinematicBody, ctx : ^CollisionContext, dt : f32) {
         game_ctx.player.health = la.min(game_ctx.player.health + next_p.amount, game_ctx.player.max_health)
         sa.unordered_remove(&game_ctx.collision_ctx.health_pickups, p_idx)
         sa.append(&processed, p_idx)
+        play_sound_rand_pitch(.Pick_Up)
     }
 }
 

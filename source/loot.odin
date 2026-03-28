@@ -127,6 +127,7 @@ spawn_loot :: proc() {
 stomp_loot :: proc(player: ^Player, lb: ^Lootbox, idx: int) {
     if rectangle_overlap(player.stomp.hitbox.rect, lb.rect) {
         if lb.open {
+            play_sound_rand_pitch(.Pick_Up)
             apply_player_modifer(player, lb.modifier)
             add_pick_up_render_at_pos(lb.modifier.kind, get_rect_center(lb.rect))
             lb^ = {}

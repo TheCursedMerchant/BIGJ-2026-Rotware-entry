@@ -58,6 +58,7 @@ Context :: struct {
     level                   : ^Level,
     collision_ctx           : ^CollisionContext,
     wave_spawner            : ^WaveSpawner,
+    audio                   : ^Audio,
 }
 
 PauseMenuButtonKind :: enum { Continue, Restart }
@@ -129,9 +130,8 @@ init :: proc() {
 	rl.InitAudioDevice()
     if rl.IsAudioDeviceReady() {
         log.info("Audio device is ready!")
-        // TODO: Load Sounds Here
+        init_sounds(game_ctx)
     }
-
 
     log.debugf("Color render size : %v", size_of(ColorRender))
     log.debugf("Context size : %v", size_of(Context))
@@ -168,6 +168,7 @@ init_game_ctx :: proc() {
     game_ctx.collision_ctx = new(CollisionContext) 
     game_ctx.wave_spawner = new(WaveSpawner)
     game_ctx.menu = new(Menu)
+    game_ctx.audio = new(Audio)
     game_ctx.wave_spawner.wave_count = 1
     game_ctx.time_scale = 1.0
     game_ctx.pattern_master.area_count = 1
@@ -400,6 +401,7 @@ update_kickbox_timers :: proc(ctx: ^CollisionContext, player: ^Player, dt : f32)
 }
 
 explode_kickbox :: proc(kb: ^KinematicBody) {
+    play_sound_rand_pitch(.Explosion)
     stop_timer(&kb.timer)
     explosion := Explosion { timer = { duration = EXPLOSION_DURATION } }
     explosion.rect = kb.box.rectangle

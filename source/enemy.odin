@@ -71,6 +71,7 @@ move_attack_player :: proc(enemy : ^Enemy) {
     if la.distance(enemy_center, player_rect.xy) < enemy.attack_range {
         enemy.kb.vel = {}
         if enemy.attack_timer <= 0 {
+            play_sound_rand_pitch(.Stomp)
             enemy.attack_timer = enemy.attack_rate
             enemy.attack_box.rect.xy = (player_rect.xy - (player_rect.zw / 2))
             enemy.attack_box.current_color = enemy.attack_box.color
@@ -138,6 +139,7 @@ new_enemy :: proc(
 }
 
 kill_enemy :: proc(idx: int, data : ^EnemyData) {
+    play_sound_rand_pitch(.Death)
     shake_cam(KICK_SHAKE_INTENSITY)
     enemy := &game_ctx.enemies.active[idx]
     game_ctx.currency += enemy.currency_value
