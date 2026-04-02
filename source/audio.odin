@@ -41,7 +41,7 @@ init_audio :: proc(ctx: ^Context) {
         clip.sound = rl.LoadSound(rl.TextFormat("%s", clip.path))
         rl.SetSoundVolume(clip.sound, ctx.audio.volume)
     }
-    ctx.audio.bgm = rl.LoadMusicStream("../assets/test_song.wav")
+    ctx.audio.bgm = rl.LoadMusicStream("../assets/strudel_song.wav")
     rl.SetMusicVolume(ctx.audio.bgm, ctx.audio.volume - .15)
 }
 
